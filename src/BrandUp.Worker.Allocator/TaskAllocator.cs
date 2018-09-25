@@ -20,6 +20,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         private readonly TimeSpan defaultCommandWaitingTimeout = TimeSpan.FromSeconds(30);
         private readonly int maxCommandsPerExecutor = 10;
         private int countExecutingCommands = 0;
+        private readonly ITaskRepository taskRepository;
 
         #endregion
 
@@ -34,7 +35,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
         #endregion
 
-        public TaskAllocator(ITaskMetadataManager metadataManager, IOptions<TaskAllocatorOptions> options)
+        public TaskAllocator(ITaskMetadataManager metadataManager, ITaskRepository taskRepository, IOptions<TaskAllocatorOptions> options)
         {
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
@@ -47,21 +48,25 @@ namespace BrandUp.Worker.Allocator.Infrastructure
                 maxCommandsPerExecutor = optionsValue.MaxTasksPerExecutor;
 
             MetadataManager = metadataManager ?? throw new ArgumentNullException(nameof(metadataManager));
+            this.taskRepository = taskRepository ?? throw new ArgumentNullException(nameof(taskRepository));
             commandQueue = new TaskQueue(metadataManager.Tasks.Select(it => it.TaskType).ToArray());
         }
 
         #region Methods
 
-        public void PushCommand(Guid commandId, object command, out bool isStarted, out Guid executorId)
+        public Guid PushTask(object taskModel, out bool isStarted, out Guid executorId)
         {
-            if (command == null)
-                throw new ArgumentNullException(nameof(command));
+            if (taskModel == null)
+                throw new ArgumentNullException(nameof(taskModel));
 
-            var commandMetadata = MetadataManager.FindTaskMetadata(command);
+            var commandMetadata = MetadataManager.FindTaskMetadata(taskModel);
             if (commandMetadata == null)
                 throw new ArgumentException();
 
-            var commandContainer = new TaskContainer(commandId, command);
+            var taskId = Guid.NewGuid();
+            var commandContainer = new TaskContainer(taskId, taskModel);
+
+            taskRepository.PushTask(taskId, taskModel, DateTime.UtcNow);
 
             isStarted = TryCommandExecute(commandContainer, out TaskExecutor executor);
             if (isStarted)
@@ -71,28 +76,31 @@ namespace BrandUp.Worker.Allocator.Infrastructure
                 executorId = Guid.Empty;
                 commandQueue.Enqueue(commandContainer);
             }
+
+            return taskId;
         }
 
-        private bool TryCommandExecute(TaskContainer command, out TaskExecutor executor)
+        private bool TryCommandExecute(TaskContainer taskContainer, out TaskExecutor executor)
         {
-            if (command == null)
-                throw new ArgumentNullException(nameof(command));
-
-            var commandType = command.Task.GetType();
+            var taskType = taskContainer.Task.GetType();
 
             foreach (var workerWaiting in executorWaitings.Values)
             {
-                if (!workerWaiting.Executor.IsSupportCommandType(commandType))
+                if (!workerWaiting.Executor.IsSupportCommandType(taskType))
                     continue;
 
                 if (!executorWaitings.TryRemove(workerWaiting.Executor.ExecutorId, out CommandWaiting waiting))
                     continue;
 
-                if (waiting.SendTask(command))
+                taskRepository.TaskStarted(taskContainer.TaskId, waiting.Executor.ExecutorId, DateTime.UtcNow);
+
+                if (waiting.SendTask(taskContainer))
                 {
-                    executor = workerWaiting.Executor;
+                    executor = waiting.Executor;
                     return true;
                 }
+                else
+                    taskRepository.TaskDefered(taskContainer.TaskId);
 
                 waiting.Dispose();
             }
@@ -149,16 +157,19 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (cancelationToken.IsCancellationRequested)
                 return WaitCommandsResult.ErrorResult("Ожидание комманд на выполнение было отменено до завершения регистрации в очереди ожидающих.");
 
-            var tasksToExecute = FindCommandsToExecute(executor);
+            var tasksToExecute = FindTasksToExecute(executor);
             if (tasksToExecute.Count == 0)
             {
                 var taskWaiting = CreateTaskWaiting(executor, cancelationToken, timeout);
                 tasksToExecute = await taskWaiting.WaitTask;
             }
 
+            var utcNow = DateTime.UtcNow;
             foreach (var command in tasksToExecute)
             {
                 executor.AddCommand(command);
+
+                await taskRepository.TaskStarted(command.TaskId, executorId, utcNow);
 
                 Interlocked.Increment(ref countExecutingCommands);
             }
@@ -166,7 +177,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             return WaitCommandsResult.SuccessResult(tasksToExecute.Select(it => new CommandToExecute(it.TaskId, it.Task)).ToList());
         }
 
-        private List<TaskContainer> FindCommandsToExecute(TaskExecutor executor)
+        private List<TaskContainer> FindTasksToExecute(TaskExecutor executor)
         {
             var commandsToExecute = new List<TaskContainer>();
             foreach (var commandType in executor.SupportedCommandTypes)
@@ -207,18 +218,6 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             return commandWaiting;
         }
-        public bool DoneCommandExecuting(Guid executorId, Guid commandId)
-        {
-            if (!executors.TryGetValue(executorId, out TaskExecutor executor))
-                return false;
-
-            if (!executor.TryRemoveCommand(commandId, out TaskContainer command))
-                return false;
-
-            Interlocked.Decrement(ref countExecutingCommands);
-
-            return true;
-        }
         public bool ReturnCommandToQueue(Guid executorId, Guid commandId)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
@@ -257,8 +256,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
         Task<Guid> ITaskAllocator.PushTask(object taskModel)
         {
-            var taskId = Guid.NewGuid();
-            PushCommand(taskId, taskModel, out bool isStarted, out Guid executorId);
+            var taskId = PushTask(taskModel, out bool isStarted, out Guid executorId);
             return Task.FromResult(taskId);
         }
 
@@ -279,9 +277,17 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             return result.Commands.Select(it => new TaskToExecute { TaskId = it.CommandId, Task = it.Command });
         }
 
-        Task ITaskAllocator.SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken)
+        public Task SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken)
         {
-            DoneCommandExecuting(executorId, taskId);
+            if (!executors.TryGetValue(executorId, out TaskExecutor executor))
+                throw new ArgumentException();
+
+            if (!executor.TryRemoveCommand(taskId, out TaskContainer command))
+                throw new ArgumentException();
+
+            Interlocked.Decrement(ref countExecutingCommands);
+
+            taskRepository.TaskDone(taskId, executingTime, DateTime.UtcNow);
 
             return Task.CompletedTask;
         }
@@ -333,17 +339,12 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             public bool SendTask(TaskContainer command)
             {
-                if (timeoutCancellation.IsCancellationRequested)
-                    return false;
-
-                completionSource.SetResult(new List<TaskContainer> { command });
-
-                return true;
+                return completionSource.TrySetResult(new List<TaskContainer> { command });
             }
 
             public void End()
             {
-                completionSource.SetResult(new List<TaskContainer>());
+                completionSource.TrySetResult(new List<TaskContainer>());
             }
 
             public void Dispose()

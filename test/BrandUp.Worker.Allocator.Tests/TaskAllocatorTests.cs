@@ -31,7 +31,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             serviceScope = serviceProvider.CreateScope();
 
             manager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
-            allocator = new TaskAllocator(manager, serviceScope.ServiceProvider.GetService<IOptions<TaskAllocatorOptions>>());
+            allocator = new TaskAllocator(manager, new DefaultTaskRepository(), serviceScope.ServiceProvider.GetService<IOptions<TaskAllocatorOptions>>());
         }
 
         void IDisposable.Dispose()
@@ -54,7 +54,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         [Fact]
         public void PushCommand()
         {
-            allocator.PushCommand(Guid.NewGuid(), new TestTask(), out bool isStarted, out Guid executorId);
+            var taskId = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             Assert.False(isStarted);
             Assert.Equal(executorId, Guid.Empty);
@@ -76,7 +76,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             await Task.Delay(TimeSpan.FromSeconds(1));
 
-            allocator.PushCommand(Guid.NewGuid(), new TestTask(), out bool isStarted, out Guid executorId);
+            var taskId = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             await Task.Delay(TimeSpan.FromSeconds(1));
 
@@ -177,8 +177,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         public async Task WaitCommands_ReturnOneCommand()
         {
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
-            var commandId = Guid.NewGuid();
-            allocator.PushCommand(commandId, new TestTask(), out bool isStarted, out Guid executorId);
+            var commandId = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             var result = await allocator.WaitTasks(executorConnection.ExecutorId);
 
@@ -193,10 +192,8 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         public async Task WaitCommands_ReturnSeveralCommand()
         {
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
-            var commandId1 = Guid.NewGuid();
-            allocator.PushCommand(commandId1, new TestTask(), out bool isStarted, out Guid executorId);
-            var commandId2 = Guid.NewGuid();
-            allocator.PushCommand(commandId2, new TestTask(), out isStarted, out executorId);
+            var commandId1 = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
+            var commandId2 = allocator.PushTask(new TestTask(), out isStarted, out executorId);
 
             var result = await allocator.WaitTasks(executorConnection.ExecutorId);
 
@@ -226,14 +223,12 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         public async Task EndCommandExecuting()
         {
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
-            var commandId = Guid.NewGuid();
-            allocator.PushCommand(commandId, new TestTask(), out bool isStarted, out Guid executorId);
+            allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             var waitResult = await allocator.WaitTasks(executorConnection.ExecutorId);
 
-            var result = allocator.DoneCommandExecuting(executorConnection.ExecutorId, waitResult.Commands[0].CommandId);
+            await allocator.SuccessTaskAsync(executorConnection.ExecutorId, waitResult.Commands[0].CommandId, TimeSpan.FromSeconds(1), CancellationToken.None);
 
-            Assert.True(result);
             Assert.Equal(0, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);
         }
@@ -242,8 +237,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         public async Task ReturnCommandToQueue()
         {
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
-            var commandId = Guid.NewGuid();
-            allocator.PushCommand(commandId, new TestTask(), out bool isStarted, out Guid executorId);
+            allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             var waitResult = await allocator.WaitTasks(executorConnection.ExecutorId);
 

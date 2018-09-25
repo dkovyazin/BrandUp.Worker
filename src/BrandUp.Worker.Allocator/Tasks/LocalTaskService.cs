@@ -10,7 +10,7 @@ namespace BrandUp.Worker.Tasks
 
         public LocalTaskService(ITaskAllocator taskAllocator)
         {
-            this.taskAllocator = taskAllocator;
+            this.taskAllocator = taskAllocator ?? throw new ArgumentNullException(nameof(taskAllocator));
         }
 
         public Task<Guid> PushTask(object taskModel)
