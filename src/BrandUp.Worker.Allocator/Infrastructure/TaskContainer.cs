@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace BrandUp.Worker.Allocator
+namespace BrandUp.Worker.Allocator.Infrastructure
 {
-    internal class TaskContainer
+    public class TaskContainer
     {
         public readonly Guid TaskId;
         public readonly object Task;

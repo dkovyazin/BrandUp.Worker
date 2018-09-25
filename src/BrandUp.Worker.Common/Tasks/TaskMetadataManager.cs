@@ -9,25 +9,38 @@ namespace BrandUp.Worker.Tasks
         private readonly Dictionary<Type, int> taskTypes = new Dictionary<Type, int>();
         private readonly Dictionary<string, int> taskNames = new Dictionary<string, int>();
 
-        public TaskMetadataManager(ITaskTypeResolver taskTypeResolver)
+        public TaskMetadataManager() { }
+
+        public bool AddTaskType(Type taskType)
         {
-            if (taskTypeResolver == null)
-                throw new ArgumentNullException(nameof(taskTypeResolver));
+            if (taskType == null)
+                throw new ArgumentNullException(nameof(taskType));
+            if (!TaskMetadata.CheckTaskType(taskType))
+                throw new ArgumentException();
 
-            foreach (var taskType in taskTypeResolver.GetCommandTypes())
-            {
-                var taskMetadata = new TaskMetadata(taskType);
-                var index = tasks.Count;
+            if (taskTypes.ContainsKey(taskType))
+                return false;
 
-                taskTypes.Add(taskType, index);
-                taskNames.Add(taskMetadata.TaskName.ToLower(), index);
-                tasks.Add(taskMetadata);
-            }
+            var taskMetadata = new TaskMetadata(taskType);
+            var index = tasks.Count;
+
+            taskTypes.Add(taskType, index);
+            taskNames.Add(taskMetadata.TaskName.ToLower(), index);
+            tasks.Add(taskMetadata);
+
+            return true;
         }
 
         #region ICommandMetadataManager members
 
         public IEnumerable<TaskMetadata> Tasks => tasks;
+        public bool HasTaskType(Type type)
+        {
+            if (type == null)
+                throw new ArgumentNullException(nameof(type));
+
+            return taskTypes.ContainsKey(type);
+        }
         public TaskMetadata FindTaskMetadata(object taskModel)
         {
             if (taskModel == null)
@@ -67,6 +80,7 @@ namespace BrandUp.Worker.Tasks
     public interface ITaskMetadataManager
     {
         IEnumerable<TaskMetadata> Tasks { get; }
+        bool HasTaskType(Type type);
         TaskMetadata FindTaskMetadata(object taskModel);
         TaskMetadata FindTaskMetadata<TTask>() where TTask : class, new();
         TaskMetadata FindTaskMetadata(string taskName);

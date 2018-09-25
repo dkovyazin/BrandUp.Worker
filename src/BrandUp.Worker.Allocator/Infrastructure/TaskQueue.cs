@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace BrandUp.Worker.Allocator.Infrastructure
 {
-    internal class TaskQueue
+    public class TaskQueue
     {
         private Dictionary<Type, TaskTypeQueue> queues = new Dictionary<Type, TaskTypeQueue>();
         private volatile int count = 0;
@@ -47,7 +47,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             System.Threading.Interlocked.Increment(ref count);
         }
-        public bool TryDequeue(Type taskType, out Guid taskId, out object task)
+        public bool TryDequeue(Type taskType, out TaskContainer task)
         {
             if (taskType == null)
                 throw new ArgumentNullException(nameof(taskType));
@@ -55,17 +55,11 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (!queues.TryGetValue(taskType, out TaskTypeQueue commandQueue))
                 throw new ArgumentException("Тип задачи не поддерживается.", nameof(taskType));
 
-            if (!commandQueue.TryDequeue(out TaskContainer commandContainer))
-            {
-                taskId = Guid.Empty;
-                task = null;
+            if (!commandQueue.TryDequeue(out task))
                 return false;
-            }
 
             System.Threading.Interlocked.Decrement(ref count);
 
-            taskId = commandContainer.TaskId;
-            task = commandContainer.Task;
             return true;
         }
 

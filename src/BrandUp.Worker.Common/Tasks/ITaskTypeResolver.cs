@@ -10,22 +10,22 @@ namespace BrandUp.Worker.Tasks
         IEnumerable<Type> GetCommandTypes();
     }
 
-    public class AssemblyCommandTypeResolver : ITaskTypeResolver
+    public class AssemblyTaskTypeResolver : ITaskTypeResolver
     {
-        private readonly List<Assembly> _assemblies;
+        private readonly List<Assembly> assemblies;
 
-        public AssemblyCommandTypeResolver(params Assembly[] assemblies) : this((IEnumerable<Assembly>)assemblies) { }
-        public AssemblyCommandTypeResolver(IEnumerable<Assembly> assemblies)
+        public AssemblyTaskTypeResolver(params Assembly[] assemblies) : this((IEnumerable<Assembly>)assemblies) { }
+        public AssemblyTaskTypeResolver(IEnumerable<Assembly> assemblies)
         {
             if (assemblies == null)
                 throw new ArgumentNullException(nameof(assemblies));
 
-            _assemblies = assemblies.ToList();
+            this.assemblies = assemblies.ToList();
         }
 
         public IEnumerable<Type> GetCommandTypes()
         {
-            foreach (var assembly in _assemblies)
+            foreach (var assembly in assemblies)
             {
                 var assemblyTypes = assembly.GetTypes();
                 foreach (var assemblyType in assemblyTypes)
@@ -38,6 +38,17 @@ namespace BrandUp.Worker.Tasks
             }
 
             yield break;
+        }
+
+        public void AddAssembly(Assembly assembly)
+        {
+            if (assembly == null)
+                throw new ArgumentNullException(nameof(assembly));
+
+            if (assemblies.Contains(assembly))
+                return;
+
+            assemblies.Add(assembly);
         }
     }
 }

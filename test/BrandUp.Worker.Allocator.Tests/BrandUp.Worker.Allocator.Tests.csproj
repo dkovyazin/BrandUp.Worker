@@ -4,8 +4,6 @@
     <TargetFramework>netcoreapp2.1</TargetFramework>
 
     <IsPackable>false</IsPackable>
-
-    <RootNamespace>BrandUp.Worker</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\BrandUp.Worker.Allocator\BrandUp.Worker.Allocator.csproj" />
     <ProjectReference Include="..\..\src\BrandUp.Worker.Common\BrandUp.Worker.Common.csproj" />
   </ItemGroup>
 

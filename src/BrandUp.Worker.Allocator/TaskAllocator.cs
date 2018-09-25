@@ -1,18 +1,19 @@
 ﻿using BrandUp.Worker.Tasks;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace BrandUp.Worker.Allocator.Infrastructure
 {
-    public class TaskAllocator : IDisposable
+    public class TaskAllocator : ITaskAllocator, IDisposable
     {
         #region Fields
 
-        private readonly ITaskMetadataManager metadataManager;
-        private readonly CancellationTokenSource cancellation;
+        private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
         private readonly TaskQueue commandQueue;
         private ConcurrentDictionary<Guid, TaskExecutor> executors = new ConcurrentDictionary<Guid, TaskExecutor>();
         private ConcurrentDictionary<Guid, CommandWaiting> executorWaitings = new ConcurrentDictionary<Guid, CommandWaiting>();
@@ -24,7 +25,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
         #region Properties
 
-        public ITaskMetadataManager MetadataManager => metadataManager;
+        public ITaskMetadataManager MetadataManager { get; }
         public TimeSpan DefaultCommandWaitingTimeout => defaultCommandWaitingTimeout;
         public int CountExecutors => executors.Count;
         public int CountExecutorWaitings => executorWaitings.Count;
@@ -33,21 +34,20 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
         #endregion
 
-        public TaskAllocator(CommandAllocatorOptions options)
+        public TaskAllocator(ITaskMetadataManager metadataManager, IOptions<TaskAllocatorOptions> options)
         {
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
-            if (options.CommandMetadataManager == null)
-                throw new ArgumentNullException(nameof(options.CommandMetadataManager));
 
-            if (options.DefaultCommandWaitingTimeout > TimeSpan.Zero)
-                defaultCommandWaitingTimeout = options.DefaultCommandWaitingTimeout;
-            if (options.MaxCommandsPerExecutor > 0)
-                maxCommandsPerExecutor = options.MaxCommandsPerExecutor;
+            var optionsValue = options.Value;
 
-            metadataManager = options.CommandMetadataManager ?? throw new ArgumentNullException(nameof(options.CommandMetadataManager));
+            if (optionsValue.DefaultTaskWaitingTimeout > TimeSpan.Zero)
+                defaultCommandWaitingTimeout = optionsValue.DefaultTaskWaitingTimeout;
+            if (optionsValue.MaxTasksPerExecutor > 0)
+                maxCommandsPerExecutor = optionsValue.MaxTasksPerExecutor;
+
+            MetadataManager = metadataManager ?? throw new ArgumentNullException(nameof(metadataManager));
             commandQueue = new TaskQueue(metadataManager.Tasks.Select(it => it.TaskType).ToArray());
-            cancellation = new CancellationTokenSource();
         }
 
         #region Methods
@@ -57,7 +57,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (command == null)
                 throw new ArgumentNullException(nameof(command));
 
-            var commandMetadata = metadataManager.FindTaskMetadata(command);
+            var commandMetadata = MetadataManager.FindTaskMetadata(command);
             if (commandMetadata == null)
                 throw new ArgumentException();
 
@@ -85,11 +85,16 @@ namespace BrandUp.Worker.Allocator.Infrastructure
                 if (!workerWaiting.Executor.IsSupportCommandType(commandType))
                     continue;
 
-                if (workerWaiting.TryAddCommandToExecuting(command))
+                if (!executorWaitings.TryRemove(workerWaiting.Executor.ExecutorId, out CommandWaiting waiting))
+                    continue;
+
+                if (waiting.SendTask(command))
                 {
                     executor = workerWaiting.Executor;
                     return true;
                 }
+
+                waiting.Dispose();
             }
 
             executor = null;
@@ -103,7 +108,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             var commandTypes = new List<Type>();
             foreach (var commandTypeName in options.CommandTypeNames)
             {
-                var commandMetadata = metadataManager.FindTaskMetadata(commandTypeName);
+                var commandMetadata = MetadataManager.FindTaskMetadata(commandTypeName);
                 if (commandMetadata == null)
                     return ConnectExecutorResult.ErrorResult("Не найден один из типов команды.");
 
@@ -121,19 +126,19 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             return ConnectExecutorResult.SuccessResult(handlerId);
         }
-        public WaitCommandsResult WaitCommands(Guid executorId)
+        public Task<WaitCommandsResult> WaitTasks(Guid executorId)
         {
-            return WaitCommands(executorId, CancellationToken.None);
+            return WaitTasks(executorId, CancellationToken.None);
         }
-        public WaitCommandsResult WaitCommands(Guid executorId, CancellationToken cancelationToken)
+        public Task<WaitCommandsResult> WaitTasks(Guid executorId, CancellationToken cancelationToken)
         {
-            return WaitCommands(executorId, cancelationToken, defaultCommandWaitingTimeout);
+            return WaitTasksAsync(executorId, cancelationToken, defaultCommandWaitingTimeout);
         }
-        public WaitCommandsResult WaitCommands(Guid executorId, TimeSpan timeout)
+        public Task<WaitCommandsResult> WaitTasks(Guid executorId, TimeSpan timeout)
         {
-            return WaitCommands(executorId, CancellationToken.None, timeout);
+            return WaitTasksAsync(executorId, CancellationToken.None, timeout);
         }
-        public WaitCommandsResult WaitCommands(Guid executorId, CancellationToken cancelationToken, TimeSpan timeout)
+        public async Task<WaitCommandsResult> WaitTasksAsync(Guid executorId, CancellationToken cancelationToken, TimeSpan timeout)
         {
             if (timeout <= TimeSpan.Zero)
                 throw new ArgumentException("Таймаут не можут быть 0.", nameof(timeout));
@@ -144,22 +149,21 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (cancelationToken.IsCancellationRequested)
                 return WaitCommandsResult.ErrorResult("Ожидание комманд на выполнение было отменено до завершения регистрации в очереди ожидающих.");
 
-            var commandsToExecute = FindCommandsToExecute(executor);
-            if (commandsToExecute.Count == 0)
+            var tasksToExecute = FindCommandsToExecute(executor);
+            if (tasksToExecute.Count == 0)
             {
-                var commandWaiting = AddCommandWaiting(executor, cancelationToken, timeout);
-                if (!commandWaiting.WaitCommands(out commandsToExecute))
-                    return WaitCommandsResult.SuccessEmpty();
+                var taskWaiting = CreateTaskWaiting(executor, cancelationToken, timeout);
+                tasksToExecute = await taskWaiting.WaitTask;
             }
 
-            foreach (var command in commandsToExecute)
+            foreach (var command in tasksToExecute)
             {
                 executor.AddCommand(command);
 
                 Interlocked.Increment(ref countExecutingCommands);
             }
 
-            return WaitCommandsResult.SuccessResult(commandsToExecute.Select(it => new CommandToExecute(it.TaskId, it.Task)).ToList());
+            return WaitCommandsResult.SuccessResult(tasksToExecute.Select(it => new CommandToExecute(it.TaskId, it.Task)).ToList());
         }
 
         private List<TaskContainer> FindCommandsToExecute(TaskExecutor executor)
@@ -167,9 +171,9 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             var commandsToExecute = new List<TaskContainer>();
             foreach (var commandType in executor.SupportedCommandTypes)
             {
-                while (commandQueue.TryDequeue(commandType, out Guid commandId, out object command))
+                while (commandQueue.TryDequeue(commandType, out TaskContainer task))
                 {
-                    commandsToExecute.Add(new TaskContainer(commandId, command));
+                    commandsToExecute.Add(task);
 
                     if (commandsToExecute.Count >= maxCommandsPerExecutor)
                         break;
@@ -182,21 +186,23 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             return commandsToExecute;
         }
 
-        private CommandWaiting AddCommandWaiting(TaskExecutor executor, CancellationToken cancelationToken, TimeSpan timeout)
+        private CommandWaiting CreateTaskWaiting(TaskExecutor executor, CancellationToken cancelationToken, TimeSpan timeout)
         {
             if (cancelationToken.IsCancellationRequested)
                 throw new ArgumentException();
 
-            var waitingCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancelationToken, cancellation.Token);
-            waitingCancellation.CancelAfter(timeout);
+            var timeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancelationToken, cancellation.Token);
+            timeoutCancellation.CancelAfter(timeout);
 
-            var commandWaiting = new CommandWaiting(executor, waitingCancellation);
+            var commandWaiting = new CommandWaiting(executor, timeoutCancellation);
             if (!executorWaitings.TryAdd(executor.ExecutorId, commandWaiting))
-                throw new InvalidOperationException("Не удалось зарегистрировать ожидание комманд на выполнение.");
+                throw new InvalidOperationException("Ожидание задач для исполнителя уже зарегистрировано.");
 
-            waitingCancellation.Token.Register(() =>
+            timeoutCancellation.Token.Register(() =>
             {
                 executorWaitings.TryRemove(executor.ExecutorId, out CommandWaiting removed);
+                removed.End();
+                removed.Dispose();
             });
 
             return commandWaiting;
@@ -249,6 +255,42 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
         #endregion
 
+        Task<Guid> ITaskAllocator.PushTask(object taskModel)
+        {
+            var taskId = Guid.NewGuid();
+            PushCommand(taskId, taskModel, out bool isStarted, out Guid executorId);
+            return Task.FromResult(taskId);
+        }
+
+        Task<Guid> ITaskAllocator.SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken)
+        {
+            var result = ConnectExecutor(new ExecutorOptions(taskTypeNames));
+            if (!result.Success)
+                throw new InvalidOperationException(result.Error);
+            return Task.FromResult(result.ExecutorId);
+        }
+
+        async Task<IEnumerable<TaskToExecute>> ITaskAllocator.WaitTasksAsync(Guid executorId, CancellationToken cancellationToken)
+        {
+            var result = await WaitTasks(executorId, cancellationToken);
+            if (!result.Success)
+                throw new InvalidOperationException(result.Error);
+
+            return result.Commands.Select(it => new TaskToExecute { TaskId = it.CommandId, Task = it.Command });
+        }
+
+        Task ITaskAllocator.SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken)
+        {
+            DoneCommandExecuting(executorId, taskId);
+
+            return Task.CompletedTask;
+        }
+
+        Task ITaskAllocator.ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
         #region IDisposable members
 
         private bool _isDisposed = false;
@@ -276,58 +318,37 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
         private class CommandWaiting : IDisposable
         {
-            private CancellationTokenSource _cancellation;
-            private List<TaskContainer> _commandsToExecute = new List<TaskContainer>();
-            private readonly object _sync = new object();
+            private CancellationTokenSource timeoutCancellation;
+            private TaskCompletionSource<List<TaskContainer>> completionSource;
 
             public TaskExecutor Executor { get; private set; }
+            public Task<List<TaskContainer>> WaitTask => completionSource.Task;
 
-            public CommandWaiting(TaskExecutor executor, CancellationTokenSource cancelationTokenSource)
+            public CommandWaiting(TaskExecutor executor, CancellationTokenSource timeoutCancellation)
             {
                 Executor = executor;
-                _cancellation = cancelationTokenSource;
+                this.timeoutCancellation = timeoutCancellation;
+                completionSource = new TaskCompletionSource<List<TaskContainer>>();
             }
 
-            public bool WaitCommands(out List<TaskContainer> commandsToExecute)
+            public bool SendTask(TaskContainer command)
             {
-                if (!_cancellation.Token.WaitHandle.WaitOne())
-                    throw new InvalidOperationException();
+                if (timeoutCancellation.IsCancellationRequested)
+                    return false;
 
-                lock (_sync)
-                {
-                    if (_commandsToExecute.Count > 0)
-                    {
+                completionSource.SetResult(new List<TaskContainer> { command });
 
-                        commandsToExecute = _commandsToExecute.ToList();
-                        _commandsToExecute = null;
-
-                        return true;
-                    }
-                    else
-                    {
-                        commandsToExecute = null;
-                        return false;
-                    }
-                }
+                return true;
             }
-            public bool TryAddCommandToExecuting(TaskContainer command)
+
+            public void End()
             {
-                lock (_sync)
-                {
-                    if (_cancellation.IsCancellationRequested)
-                        return false;
-
-                    _commandsToExecute.Add(command);
-
-                    _cancellation.Cancel();
-
-                    return true;
-                }
+                completionSource.SetResult(new List<TaskContainer>());
             }
 
             public void Dispose()
             {
-                _cancellation.Dispose();
+                timeoutCancellation.Dispose();
             }
 
             #region Object members
@@ -338,19 +359,6 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             }
 
             #endregion
-        }
-    }
-
-    public class CommandAllocatorOptions
-    {
-        public ITaskMetadataManager CommandMetadataManager { get; set; }
-        public TimeSpan DefaultCommandWaitingTimeout { get; set; }
-        public int MaxCommandsPerExecutor { get; set; }
-
-        public CommandAllocatorOptions() { }
-        public CommandAllocatorOptions(ITaskMetadataManager commandMetadataManager)
-        {
-            CommandMetadataManager = commandMetadataManager ?? throw new ArgumentNullException(nameof(commandMetadataManager));
         }
     }
 }

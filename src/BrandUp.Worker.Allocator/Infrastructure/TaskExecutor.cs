@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
-namespace BrandUp.Worker.Allocator
+namespace BrandUp.Worker.Allocator.Infrastructure
 {
     internal class TaskExecutor
     {

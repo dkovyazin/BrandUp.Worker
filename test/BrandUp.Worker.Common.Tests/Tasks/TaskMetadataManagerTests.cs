@@ -1,14 +1,37 @@
+using Microsoft.Extensions.DependencyInjection;
+using System;
 using Xunit;
 
 namespace BrandUp.Worker.Tasks
 {
-    public class TaskMetadataManagerTests
+    public class TaskMetadataManagerTests : IDisposable
     {
-        private readonly TaskMetadataManager manager;
+        private readonly ServiceProvider serviceProvider;
+        private readonly IServiceScope serviceScope;
+        private readonly ITaskMetadataManager manager;
 
         public TaskMetadataManagerTests()
         {
-            manager = new TaskMetadataManager(new AssemblyCommandTypeResolver(typeof(TestTask).Assembly));
+            var services = new ServiceCollection();
+            services.AddWorker()
+                .AddTaskType(typeof(TestTask));
+
+            serviceProvider = services.BuildServiceProvider();
+            serviceScope = serviceProvider.CreateScope();
+
+            manager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
+        }
+
+        void IDisposable.Dispose()
+        {
+            serviceScope.Dispose();
+            serviceProvider.Dispose();
+        }
+
+        [Fact]
+        public void HasTaskType()
+        {
+            Assert.True(manager.HasTaskType(typeof(TestTask)));
         }
 
         [Fact]
