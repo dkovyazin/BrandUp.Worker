@@ -6,34 +6,38 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 {
     internal class TaskExecutor
     {
-        private readonly HashSet<Type> _supportedCommandTypes;
-        private readonly ConcurrentDictionary<Guid, TaskContainer> _executingCommands = new ConcurrentDictionary<Guid, TaskContainer>();
+        private readonly HashSet<Type> supportedTaskTypes;
+        private readonly ConcurrentDictionary<Guid, TaskContainer> executingTasks = new ConcurrentDictionary<Guid, TaskContainer>();
 
         public readonly Guid ExecutorId;
-        public IEnumerable<Type> SupportedCommandTypes => _supportedCommandTypes;
-        public int CountExecutingCommands => _executingCommands.Count;
+        public IEnumerable<Type> SupportedCommandTypes => supportedTaskTypes;
+        public int CountExecutingCommands => executingTasks.Count;
+        public bool IsDisconnected => executingTasks == null;
 
-        public TaskExecutor(Guid id, List<Type> supportedCommandTypes)
+        public TaskExecutor(Guid id)
         {
-            if (supportedCommandTypes == null || supportedCommandTypes.Count == 0)
-                throw new ArgumentException("Список доступных очередей команд не может быть пустым.", nameof(supportedCommandTypes));
-
             ExecutorId = id;
-            _supportedCommandTypes = new HashSet<Type>(supportedCommandTypes);
+        }
+        public TaskExecutor(Guid id, List<Type> supportedTaskTypes) : this(id)
+        {
+            if (supportedTaskTypes == null || supportedTaskTypes.Count == 0)
+                throw new ArgumentException("Список доступных очередей команд не может быть пустым.", nameof(supportedTaskTypes));
+
+            this.supportedTaskTypes = new HashSet<Type>(supportedTaskTypes);
         }
 
         public bool IsSupportCommandType(Type type)
         {
-            return _supportedCommandTypes.Contains(type);
+            return supportedTaskTypes.Contains(type);
         }
-        public void AddCommand(TaskContainer command)
+        public void AddTask(TaskContainer command)
         {
-            if (!_executingCommands.TryAdd(command.TaskId, command))
+            if (!executingTasks.TryAdd(command.TaskId, command))
                 throw new InvalidOperationException();
         }
-        public bool TryRemoveCommand(Guid commandId, out TaskContainer command)
+        public bool TryRemoveTask(Guid commandId, out TaskContainer command)
         {
-            return _executingCommands.TryRemove(commandId, out command);
+            return executingTasks.TryRemove(commandId, out command);
         }
 
         #region Object members

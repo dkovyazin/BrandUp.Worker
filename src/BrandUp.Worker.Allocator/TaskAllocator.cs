@@ -1,4 +1,5 @@
-﻿using BrandUp.Worker.Tasks;
+﻿using BrandUp.Worker.Allocator.Infrastructure;
+using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
@@ -7,7 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BrandUp.Worker.Allocator.Infrastructure
+namespace BrandUp.Worker.Allocator
 {
     public class TaskAllocator : ITaskAllocator, IDisposable
     {
@@ -54,27 +55,53 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
         #region Methods
 
+        public async Task ResporeTasksAsync()
+        {
+            foreach (var taskState in await taskRepository.GetActualTasks())
+            {
+                var taskMetadata = MetadataManager.FindTaskMetadata(taskState.TaskModel);
+                if (taskMetadata == null)
+                    throw new ArgumentException();
+
+                var taskContainer = new TaskContainer(taskState.TaskId, taskState.TaskModel);
+
+                if (taskState.ExecutorId.HasValue)
+                {
+                    if (!executors.TryGetValue(taskState.ExecutorId.Value, out TaskExecutor executor))
+                        executors.TryAdd(taskState.ExecutorId.Value, executor = new TaskExecutor(taskState.ExecutorId.Value));
+
+                    executor.AddTask(taskContainer);
+                    Interlocked.Increment(ref countExecutingTasks);
+                }
+                else
+                    commandQueue.Enqueue(taskContainer);
+            }
+        }
+
         public Guid PushTask(object taskModel, out bool isStarted, out Guid executorId)
         {
             if (taskModel == null)
                 throw new ArgumentNullException(nameof(taskModel));
 
-            var commandMetadata = MetadataManager.FindTaskMetadata(taskModel);
-            if (commandMetadata == null)
+            var taskMetadata = MetadataManager.FindTaskMetadata(taskModel);
+            if (taskMetadata == null)
                 throw new ArgumentException();
 
             var taskId = Guid.NewGuid();
-            var commandContainer = new TaskContainer(taskId, taskModel);
+            var taskContainer = new TaskContainer(taskId, taskModel);
 
             taskRepository.PushTaskAsync(taskId, taskModel, DateTime.UtcNow);
 
-            isStarted = TryCommandExecute(commandContainer, out TaskExecutor executor);
+            isStarted = TryCommandExecute(taskContainer, out TaskExecutor executor);
             if (isStarted)
+            {
                 executorId = executor.ExecutorId;
+                Interlocked.Increment(ref countExecutingTasks);
+            }
             else
             {
                 executorId = Guid.Empty;
-                commandQueue.Enqueue(commandContainer);
+                commandQueue.Enqueue(taskContainer);
             }
 
             return taskId;
@@ -168,7 +195,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             var utcNow = DateTime.UtcNow;
             foreach (var command in tasksToExecute)
             {
-                executor.AddCommand(command);
+                executor.AddTask(command);
 
                 await taskRepository.TaskStartedAsync(command.TaskId, executorId, utcNow);
 
@@ -250,7 +277,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();
 
-            if (!executor.TryRemoveCommand(taskId, out TaskContainer command))
+            if (!executor.TryRemoveTask(taskId, out TaskContainer command))
                 throw new ArgumentException();
 
             Interlocked.Decrement(ref countExecutingTasks);
@@ -263,7 +290,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();
 
-            if (!executor.TryRemoveCommand(taskId, out TaskContainer command))
+            if (!executor.TryRemoveTask(taskId, out TaskContainer command))
                 throw new ArgumentException();
 
             Interlocked.Decrement(ref countExecutingTasks);
@@ -276,7 +303,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();
 
-            if (!executor.TryRemoveCommand(taskId, out TaskContainer command))
+            if (!executor.TryRemoveTask(taskId, out TaskContainer command))
                 throw new ArgumentException();
 
             Interlocked.Decrement(ref countExecutingTasks);

@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace BrandUp.Worker.Allocator.Infrastructure
+namespace BrandUp.Worker.Allocator
 {
     public class TaskAllocatorTests : IDisposable
     {
@@ -31,7 +31,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             serviceScope = serviceProvider.CreateScope();
 
             manager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
-            allocator = new TaskAllocator(manager, new DefaultTaskRepository(), serviceScope.ServiceProvider.GetService<IOptions<TaskAllocatorOptions>>());
+            allocator = new TaskAllocator(manager, new MemoryTaskRepository(), serviceScope.ServiceProvider.GetService<IOptions<TaskAllocatorOptions>>());
         }
 
         void IDisposable.Dispose()
@@ -74,11 +74,9 @@ namespace BrandUp.Worker.Allocator.Infrastructure
                 Assert.Equal(0, allocator.CountCommandInQueue);
             });
 
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            await Task.Delay(500);
 
             var taskId = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
-
-            await Task.Delay(TimeSpan.FromSeconds(1));
 
             Assert.True(isStarted);
             Assert.Equal(executorId, executorConnection.ExecutorId);
