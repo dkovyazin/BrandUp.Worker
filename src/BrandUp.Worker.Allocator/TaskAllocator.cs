@@ -63,7 +63,7 @@ namespace BrandUp.Worker.Allocator
                 if (taskMetadata == null)
                     throw new ArgumentException();
 
-                var taskContainer = new TaskContainer(taskState.TaskId, taskState.TaskModel);
+                var taskContainer = new TaskContainer(taskState.TaskId, taskState.TaskModel, taskState.CreatedDate);
 
                 if (taskState.ExecutorId.HasValue)
                 {
@@ -88,7 +88,7 @@ namespace BrandUp.Worker.Allocator
                 throw new ArgumentException();
 
             var taskId = Guid.NewGuid();
-            var taskContainer = new TaskContainer(taskId, taskModel);
+            var taskContainer = new TaskContainer(taskId, taskModel, DateTime.UtcNow);
 
             taskRepository.PushTaskAsync(taskId, taskModel, DateTime.UtcNow);
 
@@ -108,7 +108,7 @@ namespace BrandUp.Worker.Allocator
         }
         private bool TryCommandExecute(TaskContainer taskContainer, out TaskExecutor executor)
         {
-            var taskType = taskContainer.Task.GetType();
+            var taskType = taskContainer.TaskModel.GetType();
 
             foreach (var workerWaiting in executorWaitings.Values)
             {
@@ -185,7 +185,7 @@ namespace BrandUp.Worker.Allocator
             if (cancelationToken.IsCancellationRequested)
                 return WaitCommandsResult.ErrorResult("Ожидание комманд на выполнение было отменено до завершения регистрации в очереди ожидающих.");
 
-            var tasksToExecute = FindTasksToExecute(executor);
+            var tasksToExecute = await FindTasksToExecuteAsync(executor);
             if (tasksToExecute.Count == 0)
             {
                 var taskWaiting = CreateTaskWaiting(executor, cancelationToken, timeout);
@@ -202,15 +202,20 @@ namespace BrandUp.Worker.Allocator
                 Interlocked.Increment(ref countExecutingTasks);
             }
 
-            return WaitCommandsResult.SuccessResult(tasksToExecute.Select(it => new CommandToExecute(it.TaskId, it.Task)).ToList());
+            return WaitCommandsResult.SuccessResult(tasksToExecute.Select(it => new CommandToExecute(it.TaskId, it.TaskModel)).ToList());
         }
-        private List<TaskContainer> FindTasksToExecute(TaskExecutor executor)
+        private async Task<List<TaskContainer>> FindTasksToExecuteAsync(TaskExecutor executor)
         {
             var commandsToExecute = new List<TaskContainer>();
+            var utcNow = DateTime.UtcNow;
+
             foreach (var commandType in executor.SupportedCommandTypes)
             {
                 while (commandQueue.TryDequeue(commandType, out TaskContainer task))
                 {
+                    if (await TryTaskWaitingTimeout(task, utcNow))
+                        continue;
+
                     commandsToExecute.Add(task);
 
                     if (commandsToExecute.Count >= maxTasksPerExecutor)
@@ -222,6 +227,26 @@ namespace BrandUp.Worker.Allocator
             }
 
             return commandsToExecute;
+        }
+        private async Task<bool> TryTaskWaitingTimeout(TaskContainer task, DateTime utcNow)
+        {
+            var taskMetadata = MetadataManager.FindTaskMetadata(task.TaskModel);
+            var timeoutWaiting = taskMetadata.TimeoutWaitingToStartInMiliseconds;
+            if (timeoutWaiting > 0 && utcNow >= task.CreatedDate.AddMilliseconds(timeoutWaiting))
+            {
+                try
+                {
+                    await taskRepository.TaskCancelledAsync(task.TaskId, "Timeout waiting to start.");
+                    return true;
+                }
+                catch
+                {
+                    commandQueue.Enqueue(task);
+                    return false;
+                }
+            }
+
+            return false;
         }
         private CommandWaiting CreateTaskWaiting(TaskExecutor executor, CancellationToken cancelationToken, TimeSpan timeout)
         {
@@ -249,12 +274,13 @@ namespace BrandUp.Worker.Allocator
 
         #endregion
 
+        #region ITaskAllocator members
+
         Task<Guid> ITaskAllocator.PushTask(object taskModel)
         {
             var taskId = PushTask(taskModel, out bool isStarted, out Guid executorId);
             return Task.FromResult(taskId);
         }
-
         Task<Guid> ITaskAllocator.SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken)
         {
             var result = ConnectExecutor(new ExecutorOptions(taskTypeNames));
@@ -262,7 +288,6 @@ namespace BrandUp.Worker.Allocator
                 throw new InvalidOperationException(result.Error);
             return Task.FromResult(result.ExecutorId);
         }
-
         async Task<IEnumerable<TaskToExecute>> ITaskAllocator.WaitTasksAsync(Guid executorId, CancellationToken cancellationToken)
         {
             var result = await WaitTasks(executorId, cancellationToken);
@@ -271,7 +296,6 @@ namespace BrandUp.Worker.Allocator
 
             return result.Commands.Select(it => new TaskToExecute { TaskId = it.CommandId, Task = it.Command });
         }
-
         public async Task SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
@@ -284,7 +308,6 @@ namespace BrandUp.Worker.Allocator
 
             await taskRepository.TaskDoneAsync(taskId, executingTime, DateTime.UtcNow);
         }
-
         public async Task ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
@@ -297,7 +320,6 @@ namespace BrandUp.Worker.Allocator
 
             await taskRepository.TaskErrorAsync(taskId, executingTime, DateTime.UtcNow);
         }
-
         public async Task DeferTaskAsync(Guid executorId, Guid taskId, CancellationToken cancellationToken)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
@@ -312,6 +334,8 @@ namespace BrandUp.Worker.Allocator
 
             await taskRepository.TaskDeferedAsync(taskId);
         }
+
+        #endregion
 
         #region IDisposable members
 

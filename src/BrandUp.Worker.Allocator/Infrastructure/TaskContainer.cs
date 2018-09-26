@@ -4,13 +4,15 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 {
     public class TaskContainer
     {
-        public readonly Guid TaskId;
-        public readonly object Task;
+        public Guid TaskId { get; }
+        public object TaskModel { get; }
+        public DateTime CreatedDate { get; }
 
-        public TaskContainer(Guid id, object task)
+        public TaskContainer(Guid taskId, object taskModel, DateTime createdDate)
         {
-            TaskId = id;
-            Task = task;
+            TaskId = taskId;
+            TaskModel = taskModel;
+            CreatedDate = createdDate;
         }
 
         #region Object members

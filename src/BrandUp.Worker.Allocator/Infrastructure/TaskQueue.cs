@@ -40,7 +40,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (task == null)
                 throw new ArgumentNullException(nameof(task));
 
-            if (!queues.TryGetValue(task.Task.GetType(), out TaskTypeQueue taskQueue))
+            if (!queues.TryGetValue(task.TaskModel.GetType(), out TaskTypeQueue taskQueue))
                 throw new ArgumentException("Тип команды не поддерживается.", nameof(task));
 
             taskQueue.Enqueue(task);

@@ -52,7 +52,7 @@ namespace BrandUp.Worker.Allocator
         }
 
         [Fact]
-        public void PushTask()
+        public async Task PushTask()
         {
             var taskId = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
@@ -60,6 +60,13 @@ namespace BrandUp.Worker.Allocator
             Assert.Equal(executorId, Guid.Empty);
             Assert.Equal(1, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);
+
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var result = await allocator.WaitTasks(executorConnection.ExecutorId);
+
+            Assert.NotEmpty(result.Commands);
+            Assert.Equal(0, allocator.CountCommandInQueue);
+            Assert.Equal(1, allocator.CountCommandExecuting);
         }
 
         [Fact]
@@ -204,6 +211,21 @@ namespace BrandUp.Worker.Allocator
             Assert.Equal(0, allocator.CountCommandInQueue);
             Assert.Equal(2, allocator.CountCommandExecuting);
             Assert.Equal(0, allocator.CountExecutorWaitings);
+        }
+
+        [Fact]
+        public async Task WaitTasks_TimeoutWaitingToStart()
+        {
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var commandId1 = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
+
+            await Task.Delay(500);
+
+            var result = await allocator.WaitTasks(executorConnection.ExecutorId);
+
+            Assert.Empty(result.Commands);
+            Assert.Equal(0, allocator.CountCommandInQueue);
+            Assert.Equal(0, allocator.CountCommandExecuting);
         }
 
         [Fact]

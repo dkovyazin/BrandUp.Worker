@@ -12,6 +12,7 @@ namespace BrandUp.Worker.Tasks
         Task TaskDeferedAsync(Guid taskId);
         Task TaskErrorAsync(Guid taskId, TimeSpan executingTime, DateTime doneDate);
         Task TaskDoneAsync(Guid taskId, TimeSpan executingTime, DateTime doneDate);
+        Task TaskCancelledAsync(Guid taskId, string reason);
     }
 
     public class TaskState
@@ -51,6 +52,11 @@ namespace BrandUp.Worker.Tasks
         }
 
         public Task TaskStartedAsync(Guid taskId, Guid executorId, DateTime startedDate)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task TaskCancelledAsync(Guid taskId, string reason)
         {
             return Task.CompletedTask;
         }

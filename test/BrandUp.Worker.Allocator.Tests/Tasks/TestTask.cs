@@ -1,6 +1,6 @@
 ﻿namespace BrandUp.Worker.Tasks
 {
-    [Task]
+    [Task(TimeoutWaitingToStartInMiliseconds = 100)]
     public class TestTask
     {
     }

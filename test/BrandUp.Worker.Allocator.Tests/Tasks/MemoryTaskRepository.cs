@@ -73,6 +73,13 @@ namespace BrandUp.Worker.Tasks
 
             return Task.CompletedTask;
         }
+        public Task TaskCancelledAsync(Guid taskId, string reason)
+        {
+            if (!tasks.TryRemove(taskId, out TaskEntity task))
+                throw new InvalidOperationException();
+
+            return Task.CompletedTask;
+        }
 
         private class TaskEntity
         {
@@ -122,7 +129,6 @@ namespace BrandUp.Worker.Tasks
                 ExecutionTime = executingTime;
                 FinishDate = doneDate;
             }
-
             public void Error(TimeSpan executingTime, DateTime doneDate)
             {
                 ExecutionTime = executingTime;

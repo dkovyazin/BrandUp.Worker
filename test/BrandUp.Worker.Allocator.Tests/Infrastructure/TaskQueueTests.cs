@@ -22,7 +22,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             var commandType = typeof(TestTask);
             var queue = new TaskQueue(new Type[] { commandType });
 
-            queue.Enqueue(new TaskContainer(Guid.NewGuid(), new TestTask()));
+            queue.Enqueue(new TaskContainer(Guid.NewGuid(), new TestTask(), DateTime.UtcNow));
 
             Assert.Equal(1, queue.Count);
         }
@@ -35,12 +35,12 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             var taskId = Guid.NewGuid();
             var taskModel = new TestTask();
-            queue.Enqueue(new TaskContainer(taskId, taskModel));
+            queue.Enqueue(new TaskContainer(taskId, taskModel, DateTime.UtcNow));
 
             var dequeueResult = queue.TryDequeue(commandType, out TaskContainer task);
 
             Assert.True(dequeueResult);
-            Assert.Equal(taskModel, task.Task);
+            Assert.Equal(taskModel, task.TaskModel);
             Assert.Equal(taskId, task.TaskId);
             Assert.Equal(0, queue.Count);
         }
