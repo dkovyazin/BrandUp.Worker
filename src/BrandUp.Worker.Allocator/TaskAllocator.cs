@@ -79,7 +79,6 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             return taskId;
         }
-
         private bool TryCommandExecute(TaskContainer taskContainer, out TaskExecutor executor)
         {
             var taskType = taskContainer.Task.GetType();
@@ -108,6 +107,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             executor = null;
             return false;
         }
+
         public ConnectExecutorResult ConnectExecutor(ExecutorOptions options)
         {
             if (options == null)
@@ -134,6 +134,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             return ConnectExecutorResult.SuccessResult(handlerId);
         }
+
         public Task<WaitCommandsResult> WaitTasks(Guid executorId)
         {
             return WaitTasks(executorId, CancellationToken.None);
@@ -176,7 +177,6 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             return WaitCommandsResult.SuccessResult(tasksToExecute.Select(it => new CommandToExecute(it.TaskId, it.Task)).ToList());
         }
-
         private List<TaskContainer> FindTasksToExecute(TaskExecutor executor)
         {
             var commandsToExecute = new List<TaskContainer>();
@@ -196,7 +196,6 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             return commandsToExecute;
         }
-
         private CommandWaiting CreateTaskWaiting(TaskExecutor executor, CancellationToken cancelationToken, TimeSpan timeout)
         {
             if (cancelationToken.IsCancellationRequested)
@@ -219,39 +218,6 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             });
 
             return commandWaiting;
-        }
-        public bool ReturnCommandToQueue(Guid executorId, Guid commandId)
-        {
-            if (!executors.TryGetValue(executorId, out TaskExecutor executor))
-                return false;
-
-            if (!executor.TryRemoveCommand(commandId, out TaskContainer command))
-                return false;
-
-            Interlocked.Decrement(ref countExecutingTasks);
-
-            commandQueue.Enqueue(command);
-
-            return true;
-        }
-        public bool TryPullExecutingCommand(Guid executorId, Guid commandId, out object command)
-        {
-            if (!executors.TryGetValue(executorId, out TaskExecutor executor))
-            {
-                command = null;
-                return false;
-            }
-
-            if (!executor.TryRemoveCommand(commandId, out TaskContainer commandContainer))
-            {
-                command = null;
-                return false;
-            }
-
-            Interlocked.Decrement(ref countExecutingTasks);
-
-            command = commandContainer.Task;
-            return true;
         }
 
         #endregion
@@ -303,6 +269,21 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             Interlocked.Decrement(ref countExecutingTasks);
 
             await taskRepository.TaskErrorAsync(taskId, executingTime, DateTime.UtcNow);
+        }
+
+        public async Task DeferTaskAsync(Guid executorId, Guid taskId, CancellationToken cancellationToken)
+        {
+            if (!executors.TryGetValue(executorId, out TaskExecutor executor))
+                throw new ArgumentException();
+
+            if (!executor.TryRemoveCommand(taskId, out TaskContainer command))
+                throw new ArgumentException();
+
+            Interlocked.Decrement(ref countExecutingTasks);
+
+            commandQueue.Enqueue(command);
+
+            await taskRepository.TaskDeferedAsync(taskId);
         }
 
         #region IDisposable members

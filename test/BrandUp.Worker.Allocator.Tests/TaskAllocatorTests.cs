@@ -251,16 +251,15 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         }
 
         [Fact]
-        public async Task ReturnCommandToQueue()
+        public async Task DeferTask()
         {
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
             allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             var waitResult = await allocator.WaitTasks(executorConnection.ExecutorId);
 
-            var result = allocator.ReturnCommandToQueue(executorConnection.ExecutorId, waitResult.Commands[0].CommandId);
+            await allocator.DeferTaskAsync(executorConnection.ExecutorId, waitResult.Commands[0].CommandId, CancellationToken.None);
 
-            Assert.True(result);
             Assert.Equal(1, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);
         }

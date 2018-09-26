@@ -94,7 +94,6 @@ namespace BrandUp.Worker.Executor
                 var taskHandler = (ITaskHandler)jobScope.ServiceProvider.GetRequiredService(handlerFactory.HandlerType);
 
                 var job = new JobTask(taskId, task, taskHandler, this);
-
                 if (!_startedJobs.TryAdd(job.TaskId, job))
                     throw new InvalidOperationException();
 
@@ -122,15 +121,16 @@ namespace BrandUp.Worker.Executor
 
             await taskAllocator.SuccessTaskAsync(ExecutorId, job.TaskId, job.Elapsed, CancellationToken.None);
 
-            removed.Dispose();
-
             Interlocked.Increment(ref executedCommands);
         }
-        Task IJobExecutorContext.OnCancelledJob(JobTask job)
+        async Task IJobExecutorContext.OnCancelledJob(JobTask job)
         {
-            Interlocked.Increment(ref cancelledCommands);
+            if (!_startedJobs.TryRemove(job.TaskId, out JobTask removed))
+                throw new InvalidOperationException();
 
-            return Task.CompletedTask;
+            await taskAllocator.DeferTaskAsync(ExecutorId, job.TaskId, CancellationToken.None);
+
+            Interlocked.Increment(ref cancelledCommands);
         }
         async Task IJobExecutorContext.OnErrorJob(JobTask job, Exception exception)
         {
@@ -138,8 +138,6 @@ namespace BrandUp.Worker.Executor
                 throw new InvalidOperationException();
 
             await taskAllocator.ErrorTaskAsync(ExecutorId, job.TaskId, job.Elapsed, exception, CancellationToken.None);
-
-            removed.Dispose();
 
             Interlocked.Increment(ref executedCommands);
             Interlocked.Increment(ref faultedCommands);
@@ -150,8 +148,6 @@ namespace BrandUp.Worker.Executor
                 throw new InvalidOperationException();
 
             await taskAllocator.ErrorTaskAsync(ExecutorId, job.TaskId, job.Elapsed, exception, CancellationToken.None);
-
-            removed.Dispose();
 
             Interlocked.Increment(ref executedCommands);
             Interlocked.Increment(ref faultedCommands);

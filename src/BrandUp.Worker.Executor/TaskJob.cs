@@ -29,6 +29,7 @@ namespace BrandUp.Worker.Executor
             _stopwatch = Stopwatch.StartNew();
 
             _cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
             Task.Factory.StartNew(Start, _cancellation.Token, TaskCreationOptions.None, TaskScheduler.Current);
         }
 
@@ -71,6 +72,10 @@ namespace BrandUp.Worker.Executor
             catch (Exception unhandledException)
             {
                 await executorContext.OnUnhandledError(this, unhandledException);
+            }
+            finally
+            {
+                Dispose();
             }
         }
 

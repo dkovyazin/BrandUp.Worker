@@ -77,13 +77,30 @@ namespace BrandUp.Worker.Executor.Tests
             Assert.Equal(1, taskExecutor.FaultedCommands);
             Assert.Equal(0, taskExecutor.CancelledCommands);
         }
+
+        [Fact]
+        public async Task ExecuteTask_HostStopped()
+        {
+            Assert.True(taskExecutor.IsStarted);
+
+            var taskId = await taskService.PushTask(new SuccessTask());
+
+            await Task.Delay(300);
+
+            await host.StopAsync();
+
+            Assert.Equal(0, taskExecutor.ExecutedCommands);
+            Assert.Equal(0, taskExecutor.ExecutingCommands);
+            Assert.Equal(0, taskExecutor.FaultedCommands);
+            Assert.Equal(1, taskExecutor.CancelledCommands);
+        }
     }
 
     public class SuccessTaskHandler : TaskHandler<SuccessTask>
     {
         protected override Task OnWorkAsync(SuccessTask command, CancellationToken cancellationToken)
         {
-            return Task.Delay(500);
+            return Task.Delay(500, cancellationToken);
         }
     }
 
