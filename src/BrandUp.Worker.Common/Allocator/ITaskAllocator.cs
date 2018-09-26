@@ -19,5 +19,6 @@ namespace BrandUp.Worker.Allocator
     {
         public Guid TaskId { get; set; }
         public object Task { get; set; }
+        public int Timeout { get; set; }
     }
 }

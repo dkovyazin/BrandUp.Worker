@@ -68,36 +68,36 @@ namespace BrandUp.Worker.Allocator
             return new ConnectExecutorResult(error);
         }
     }
-    public class WaitCommandsResult
+    public class WaitTasksResult
     {
         public bool Success { get; private set; }
-        public List<CommandToExecute> Commands { get; private set; }
+        public List<CommandToExecute> Tasks { get; private set; }
         public string Error { get; private set; }
-        public bool IsEmpty => Success && Commands.Count == 0;
+        public bool IsEmpty => Success && Tasks.Count == 0;
 
-        protected WaitCommandsResult() { }
-        private WaitCommandsResult(List<CommandToExecute> commands)
+        protected WaitTasksResult() { }
+        private WaitTasksResult(List<CommandToExecute> commands)
         {
-            Commands = commands ?? throw new ArgumentNullException(nameof(commands));
+            Tasks = commands ?? throw new ArgumentNullException(nameof(commands));
             Success = true;
         }
-        private WaitCommandsResult(string error)
+        private WaitTasksResult(string error)
         {
             Error = error ?? throw new ArgumentNullException(nameof(error));
             Success = false;
         }
 
-        public static WaitCommandsResult SuccessResult(List<CommandToExecute> commands)
+        public static WaitTasksResult SuccessResult(List<CommandToExecute> commands)
         {
-            return new WaitCommandsResult(commands);
+            return new WaitTasksResult(commands);
         }
-        public static WaitCommandsResult SuccessEmpty()
+        public static WaitTasksResult SuccessEmpty()
         {
-            return new WaitCommandsResult(new List<CommandToExecute>());
+            return new WaitTasksResult(new List<CommandToExecute>());
         }
-        public static WaitCommandsResult ErrorResult(string error)
+        public static WaitTasksResult ErrorResult(string error)
         {
-            return new WaitCommandsResult(error);
+            return new WaitTasksResult(error);
         }
     }
     public class CommandToExecute

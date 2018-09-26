@@ -10,6 +10,7 @@ namespace BrandUp.Worker.Tasks
         public string TaskName { get; }
         public Type TaskType { get; }
         public int TimeoutWaitingToStartInMiliseconds { get; }
+        public int ExecutionTimeout { get; }
 
         public TaskMetadata(Type objectType)
         {
@@ -33,6 +34,7 @@ namespace BrandUp.Worker.Tasks
             }
             TaskName = taskName;
             TimeoutWaitingToStartInMiliseconds = taskAttribute.TimeoutWaitingToStartInMiliseconds;
+            ExecutionTimeout = taskAttribute.ExecutionTimeout;
         }
 
         public static bool CheckTaskType(Type type)

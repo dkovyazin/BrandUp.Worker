@@ -25,7 +25,7 @@ namespace BrandUp.Worker.Executor.Tests
                         .AddTaskType<ErrorTask>()
                         .AddAllocator(options =>
                         {
-                            options.DefaultTaskWaitingTimeout = TimeSpan.FromSeconds(3);
+                            options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(3);
                         });
 
                     workerBuilder.AddExecutor()

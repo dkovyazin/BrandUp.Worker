@@ -23,7 +23,7 @@ namespace BrandUp.Worker.Allocator
                 .AddTaskType(typeof(TestTask))
                 .AddAllocator(options =>
                 {
-                    options.DefaultTaskWaitingTimeout = TimeSpan.FromSeconds(2);
+                    options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
                 });
 
             serviceProvider = services.BuildServiceProvider();

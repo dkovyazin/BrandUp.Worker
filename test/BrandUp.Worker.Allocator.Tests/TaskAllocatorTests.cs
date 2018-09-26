@@ -24,7 +24,7 @@ namespace BrandUp.Worker.Allocator
                 .AddTaskType(typeof(TestTask))
                 .AddAllocator(options =>
                 {
-                    options.DefaultTaskWaitingTimeout = TimeSpan.FromSeconds(2);
+                    options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
                 });
 
             serviceProvider = services.BuildServiceProvider();
@@ -62,9 +62,9 @@ namespace BrandUp.Worker.Allocator
             Assert.Equal(0, allocator.CountCommandExecuting);
 
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
-            var result = await allocator.WaitTasks(executorConnection.ExecutorId);
+            var tasksToExecute = await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None);
 
-            Assert.NotEmpty(result.Commands);
+            Assert.NotEmpty(tasksToExecute);
             Assert.Equal(0, allocator.CountCommandInQueue);
             Assert.Equal(1, allocator.CountCommandExecuting);
         }
@@ -76,8 +76,8 @@ namespace BrandUp.Worker.Allocator
 
             var task = Task.Run(() =>
             {
-                var result = allocator.WaitTasks(executorConnection.ExecutorId).Result;
-                Assert.Single(result.Commands);
+                var tasksToExecute = allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None).Result;
+                Assert.Single(tasksToExecute);
                 Assert.Equal(0, allocator.CountCommandInQueue);
             });
 
@@ -99,7 +99,7 @@ namespace BrandUp.Worker.Allocator
 
             var task = Task.Run(() =>
             {
-                var waitCommandsResult = allocator.WaitTasksAsync(workerConnectionResult.ExecutorId, CancellationToken.None, TimeSpan.FromSeconds(5));
+                allocator.WaitTasksAsync(workerConnectionResult.ExecutorId, CancellationToken.None).Wait();
             });
 
             await Task.Delay(TimeSpan.FromSeconds(1));
@@ -122,7 +122,7 @@ namespace BrandUp.Worker.Allocator
             var w = new System.Diagnostics.Stopwatch();
             w.Start();
 
-            await allocator.WaitTasks(result.ExecutorId);
+            await allocator.WaitTasksAsync(result.ExecutorId, CancellationToken.None);
 
             w.Stop();
 
@@ -130,23 +130,6 @@ namespace BrandUp.Worker.Allocator
 
             Assert.True(w.Elapsed >= TimeSpan.FromSeconds(1));
             Assert.True(w.Elapsed < TimeSpan.FromSeconds(3));
-            Assert.Equal(0, allocator.CountExecutorWaitings);
-        }
-
-        [Fact]
-        public async Task WaitTasks_CustomTimeout()
-        {
-            var result = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
-
-            var w = new System.Diagnostics.Stopwatch();
-            w.Start();
-
-            await allocator.WaitTasks(result.ExecutorId, TimeSpan.FromSeconds(1));
-
-            w.Stop();
-
-            Assert.True(w.Elapsed >= TimeSpan.FromSeconds(1));
-            Assert.True(w.Elapsed < TimeSpan.FromSeconds(2));
             Assert.Equal(0, allocator.CountExecutorWaitings);
         }
 
@@ -162,7 +145,7 @@ namespace BrandUp.Worker.Allocator
             {
                 var task = Task.Run(() =>
                 {
-                    allocator.WaitTasks(result.ExecutorId, cancellation.Token).Wait();
+                    allocator.WaitTasksAsync(result.ExecutorId, cancellation.Token).Wait();
                 });
 
                 await Task.Delay(TimeSpan.FromSeconds(1));
@@ -187,10 +170,10 @@ namespace BrandUp.Worker.Allocator
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
             var commandId = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
-            var result = await allocator.WaitTasks(executorConnection.ExecutorId);
+            var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();
 
-            Assert.Single(result.Commands);
-            Assert.Equal(result.Commands[0].CommandId, commandId);
+            Assert.Single(tasksToExecute);
+            Assert.Equal(tasksToExecute[0].TaskId, commandId);
             Assert.Equal(0, allocator.CountCommandInQueue);
             Assert.Equal(1, allocator.CountCommandExecuting);
             Assert.Equal(0, allocator.CountExecutorWaitings);
@@ -203,11 +186,11 @@ namespace BrandUp.Worker.Allocator
             var commandId1 = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
             var commandId2 = allocator.PushTask(new TestTask(), out isStarted, out executorId);
 
-            var result = await allocator.WaitTasks(executorConnection.ExecutorId);
+            var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();
 
-            Assert.Equal(2, result.Commands.Count);
-            Assert.Equal(result.Commands[0].CommandId, commandId1);
-            Assert.Equal(result.Commands[1].CommandId, commandId2);
+            Assert.Equal(2, tasksToExecute.Count);
+            Assert.Equal(tasksToExecute[0].TaskId, commandId1);
+            Assert.Equal(tasksToExecute[1].TaskId, commandId2);
             Assert.Equal(0, allocator.CountCommandInQueue);
             Assert.Equal(2, allocator.CountCommandExecuting);
             Assert.Equal(0, allocator.CountExecutorWaitings);
@@ -221,9 +204,9 @@ namespace BrandUp.Worker.Allocator
 
             await Task.Delay(500);
 
-            var result = await allocator.WaitTasks(executorConnection.ExecutorId);
+            var tasksToExecute = await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None);
 
-            Assert.Empty(result.Commands);
+            Assert.Empty(tasksToExecute);
             Assert.Equal(0, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);
         }
@@ -236,7 +219,7 @@ namespace BrandUp.Worker.Allocator
             int i;
             for (i = 1; i <= 2; i++)
             {
-                await Task.Run(() => allocator.WaitTasks(executorConnection.ExecutorId));
+                await Task.Run(() => allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None));
             }
 
             Assert.Equal(3, i);
@@ -248,9 +231,9 @@ namespace BrandUp.Worker.Allocator
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
             allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
-            var waitResult = await allocator.WaitTasks(executorConnection.ExecutorId);
+            var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();
 
-            await allocator.SuccessTaskAsync(executorConnection.ExecutorId, waitResult.Commands[0].CommandId, TimeSpan.FromSeconds(1), CancellationToken.None);
+            await allocator.SuccessTaskAsync(executorConnection.ExecutorId, tasksToExecute[0].TaskId, TimeSpan.FromSeconds(1), CancellationToken.None);
 
             Assert.Equal(0, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);
@@ -262,9 +245,9 @@ namespace BrandUp.Worker.Allocator
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
             allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
-            var waitResult = await allocator.WaitTasks(executorConnection.ExecutorId);
+            var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();
 
-            await allocator.ErrorTaskAsync(executorConnection.ExecutorId, waitResult.Commands[0].CommandId, TimeSpan.FromSeconds(1), new Exception("Error"), CancellationToken.None);
+            await allocator.ErrorTaskAsync(executorConnection.ExecutorId, tasksToExecute[0].TaskId, TimeSpan.FromSeconds(1), new Exception("Error"), CancellationToken.None);
 
             Assert.Equal(0, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);
@@ -276,9 +259,9 @@ namespace BrandUp.Worker.Allocator
             var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
             allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
-            var waitResult = await allocator.WaitTasks(executorConnection.ExecutorId);
+            var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();
 
-            await allocator.DeferTaskAsync(executorConnection.ExecutorId, waitResult.Commands[0].CommandId, CancellationToken.None);
+            await allocator.DeferTaskAsync(executorConnection.ExecutorId, tasksToExecute[0].TaskId, CancellationToken.None);
 
             Assert.Equal(1, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);

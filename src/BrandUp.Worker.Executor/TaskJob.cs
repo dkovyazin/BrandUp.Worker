@@ -11,10 +11,10 @@ namespace BrandUp.Worker.Executor
         private readonly object taskModel;
         private readonly ITaskHandler taskHandler;
         private readonly IJobExecutorContext executorContext;
-        private CancellationTokenSource _cancellation;
-        private Stopwatch _stopwatch;
+        private CancellationTokenSource cancellationSource;
+        private Stopwatch executionWatch;
 
-        public TimeSpan Elapsed => _stopwatch.Elapsed;
+        public TimeSpan Elapsed => executionWatch.Elapsed;
 
         internal JobTask(Guid commandId, object command, ITaskHandler handler, IJobExecutorContext executorContext)
         {
@@ -26,18 +26,18 @@ namespace BrandUp.Worker.Executor
 
         public void Start(CancellationToken cancellationToken)
         {
-            _stopwatch = Stopwatch.StartNew();
+            executionWatch = Stopwatch.StartNew();
 
-            _cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-            Task.Factory.StartNew(Start, _cancellation.Token, TaskCreationOptions.None, TaskScheduler.Current);
+            Task.Factory.StartNew(Start, cancellationSource.Token, TaskCreationOptions.None, TaskScheduler.Current);
         }
 
         private void Start()
         {
             using (var task = ExecuteAsync())
             {
-                task.Wait(_cancellation.Token);
+                task.Wait(cancellationSource.Token);
 
                 if (task.IsFaulted)
                     throw new InvalidOperationException();
@@ -50,21 +50,21 @@ namespace BrandUp.Worker.Executor
             {
                 try
                 {
-                    await taskHandler.WorkAsync(taskModel, _cancellation.Token);
+                    await taskHandler.WorkAsync(taskModel, cancellationSource.Token);
 
-                    _stopwatch.Stop();
+                    executionWatch.Stop();
 
                     await executorContext.OnSuccessJob(this);
                 }
                 catch (OperationCanceledException)
                 {
-                    _stopwatch.Stop();
+                    executionWatch.Stop();
 
                     await executorContext.OnCancelledJob(this);
                 }
                 catch (Exception exception)
                 {
-                    _stopwatch.Stop();
+                    executionWatch.Stop();
 
                     await executorContext.OnErrorJob(this, exception);
                 }
@@ -84,8 +84,8 @@ namespace BrandUp.Worker.Executor
             if (taskHandler != null)
                 taskHandler.Dispose();
 
-            if (_cancellation != null)
-                _cancellation.Dispose();
+            if (cancellationSource != null)
+                cancellationSource.Dispose();
         }
     }
 
