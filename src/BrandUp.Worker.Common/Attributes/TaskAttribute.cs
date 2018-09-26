@@ -7,6 +7,6 @@ namespace BrandUp.Worker
     {
         public string Name { get; set; }
         public int TimeoutWaitingToStartInMiliseconds { get; set; }
-        public int ExecutionTimeout { get; set; }
+        public int ExecutionTimeout { get; set; } = 30000;
     }
 }

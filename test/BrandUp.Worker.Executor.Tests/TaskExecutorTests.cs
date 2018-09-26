@@ -23,6 +23,7 @@ namespace BrandUp.Worker.Executor.Tests
                     var workerBuilder = services.AddWorker()
                         .AddTaskType<SuccessTask>()
                         .AddTaskType<ErrorTask>()
+                        .AddTaskType<TimeoutTask>()
                         .AddAllocator(options =>
                         {
                             options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(3);
@@ -30,7 +31,8 @@ namespace BrandUp.Worker.Executor.Tests
 
                     workerBuilder.AddExecutor()
                         .MapTaskHandler<SuccessTask, SuccessTaskHandler>()
-                        .MapTaskHandler<ErrorTask, ErrorTaskHandler>();
+                        .MapTaskHandler<ErrorTask, ErrorTaskHandler>()
+                        .MapTaskHandler<TimeoutTask, TimeoutTaskHandler>();
 
                 })
                 .Build();
@@ -79,6 +81,21 @@ namespace BrandUp.Worker.Executor.Tests
         }
 
         [Fact]
+        public async Task ExecuteTask_Timeout()
+        {
+            Assert.True(taskExecutor.IsStarted);
+
+            var taskId = await taskService.PushTask(new TimeoutTask());
+
+            await Task.Delay(300);
+
+            Assert.Equal(1, taskExecutor.ExecutedCommands);
+            Assert.Equal(0, taskExecutor.ExecutingCommands);
+            Assert.Equal(1, taskExecutor.FaultedCommands);
+            Assert.Equal(0, taskExecutor.CancelledCommands);
+        }
+
+        [Fact]
         public async Task ExecuteTask_HostStopped()
         {
             Assert.True(taskExecutor.IsStarted);
@@ -88,6 +105,8 @@ namespace BrandUp.Worker.Executor.Tests
             await Task.Delay(300);
 
             await host.StopAsync();
+
+            await Task.Delay(300);
 
             Assert.Equal(0, taskExecutor.ExecutedCommands);
             Assert.Equal(0, taskExecutor.ExecutingCommands);
@@ -101,6 +120,14 @@ namespace BrandUp.Worker.Executor.Tests
         protected override Task OnWorkAsync(SuccessTask command, CancellationToken cancellationToken)
         {
             return Task.Delay(500, cancellationToken);
+        }
+    }
+
+    public class TimeoutTaskHandler : TaskHandler<TimeoutTask>
+    {
+        protected override Task OnWorkAsync(TimeoutTask command, CancellationToken cancellationToken)
+        {
+            return Task.Delay(1000, cancellationToken);
         }
     }
 

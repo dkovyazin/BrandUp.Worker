@@ -13,6 +13,7 @@ namespace BrandUp.Worker.Executor
         private readonly IJobExecutorContext executorContext;
         private CancellationTokenSource cancellationSource;
         private Stopwatch executionWatch;
+        private int timeoutInMilliseconds = 0;
 
         public TimeSpan Elapsed => executionWatch.Elapsed;
 
@@ -24,24 +25,18 @@ namespace BrandUp.Worker.Executor
             this.executorContext = executorContext;
         }
 
-        public void Start(CancellationToken cancellationToken)
+        public void Start(CancellationToken cancellationToken, int timeoutInMilliseconds)
         {
+            if (timeoutInMilliseconds <= 0)
+                throw new ArgumentOutOfRangeException(nameof(timeoutInMilliseconds));
+            this.timeoutInMilliseconds = timeoutInMilliseconds;
+
             executionWatch = Stopwatch.StartNew();
 
             cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cancellationSource.CancelAfter(timeoutInMilliseconds);
 
-            Task.Factory.StartNew(Start, cancellationSource.Token, TaskCreationOptions.None, TaskScheduler.Current);
-        }
-
-        private void Start()
-        {
-            using (var task = ExecuteAsync())
-            {
-                task.Wait(cancellationSource.Token);
-
-                if (task.IsFaulted)
-                    throw new InvalidOperationException();
-            }
+            Task.Run(ExecuteAsync, cancellationSource.Token);
         }
 
         private async Task ExecuteAsync()
@@ -60,7 +55,10 @@ namespace BrandUp.Worker.Executor
                 {
                     executionWatch.Stop();
 
-                    await executorContext.OnCancelledJob(this);
+                    if (executionWatch.ElapsedMilliseconds >= timeoutInMilliseconds)
+                        await executorContext.OnTimeoutJob(this);
+                    else
+                        await executorContext.OnCancelledJob(this);
                 }
                 catch (Exception exception)
                 {
@@ -81,11 +79,8 @@ namespace BrandUp.Worker.Executor
 
         public void Dispose()
         {
-            if (taskHandler != null)
-                taskHandler.Dispose();
-
-            if (cancellationSource != null)
-                cancellationSource.Dispose();
+            taskHandler?.Dispose();
+            cancellationSource?.Dispose();
         }
     }
 
@@ -94,6 +89,7 @@ namespace BrandUp.Worker.Executor
         Guid ExecutorId { get; }
         Task OnSuccessJob(JobTask job);
         Task OnCancelledJob(JobTask job);
+        Task OnTimeoutJob(JobTask job);
         Task OnErrorJob(JobTask job, Exception exception);
         Task OnUnhandledError(JobTask job, Exception exception);
     }

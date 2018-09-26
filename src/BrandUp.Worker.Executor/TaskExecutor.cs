@@ -77,15 +77,15 @@ namespace BrandUp.Worker.Executor
                 var commandsToExecute = await taskAllocator.WaitTasksAsync(ExecutorId, cancellationToken);
 
                 foreach (var taskToExecute in commandsToExecute)
-                    StartJob(taskToExecute.TaskId, taskToExecute.Task, cancellationToken);
+                    StartJob(taskToExecute, cancellationToken);
 
                 countWaits++;
             }
         }
 
-        private void StartJob(Guid taskId, object task, CancellationToken cancellationToken)
+        private void StartJob(TaskToExecute taskToExecute, CancellationToken cancellationToken)
         {
-            if (!handlerFactories.TryGetValue(task.GetType(), out TaskHandlerFactory handlerFactory))
+            if (!handlerFactories.TryGetValue(taskToExecute.Task.GetType(), out TaskHandlerFactory handlerFactory))
                 throw new InvalidOperationException();
 
             var jobScope = serviceProvider.CreateScope();
@@ -93,11 +93,11 @@ namespace BrandUp.Worker.Executor
             {
                 var taskHandler = (ITaskHandler)jobScope.ServiceProvider.GetRequiredService(handlerFactory.HandlerType);
 
-                var job = new JobTask(taskId, task, taskHandler, this);
+                var job = new JobTask(taskToExecute.TaskId, taskToExecute.Task, taskHandler, this);
                 if (!_startedJobs.TryAdd(job.TaskId, job))
                     throw new InvalidOperationException();
 
-                job.Start(cancellationToken);
+                job.Start(cancellationToken, taskToExecute.Timeout);
             }
             catch (Exception ex)
             {
@@ -131,6 +131,16 @@ namespace BrandUp.Worker.Executor
             await taskAllocator.DeferTaskAsync(ExecutorId, job.TaskId, CancellationToken.None);
 
             Interlocked.Increment(ref cancelledCommands);
+        }
+        async Task IJobExecutorContext.OnTimeoutJob(JobTask job)
+        {
+            if (!_startedJobs.TryRemove(job.TaskId, out JobTask removed))
+                throw new InvalidOperationException();
+
+            await taskAllocator.ErrorTaskAsync(ExecutorId, job.TaskId, job.Elapsed, new TimeoutException("Timeout task executing."), CancellationToken.None);
+
+            Interlocked.Increment(ref executedCommands);
+            Interlocked.Increment(ref faultedCommands);
         }
         async Task IJobExecutorContext.OnErrorJob(JobTask job, Exception exception)
         {

@@ -23,6 +23,8 @@ namespace BrandUp.Worker.Tasks
             var taskAttribute = objectType.GetCustomAttribute<TaskAttribute>(false);
             if (taskAttribute == null)
                 throw new ArgumentException();
+            if (taskAttribute.ExecutionTimeout <= 0)
+                throw new InvalidOperationException("Таймаут выполнения задачи должен быть больше 0 миллисекунд.");
 
             var taskName = taskAttribute.Name;
             if (string.IsNullOrEmpty(taskName))
