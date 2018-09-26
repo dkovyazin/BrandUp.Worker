@@ -21,14 +21,16 @@ namespace BrandUp.Worker.Executor.Tests
                 .ConfigureServices((hostContext, services) =>
                 {
                     var workerBuilder = services.AddWorker()
-                        .AddTaskType<TestTask>()
+                        .AddTaskType<SuccessTask>()
+                        .AddTaskType<ErrorTask>()
                         .AddAllocator(options =>
                         {
                             options.DefaultTaskWaitingTimeout = TimeSpan.FromSeconds(3);
                         });
 
                     workerBuilder.AddExecutor()
-                        .MapTaskHandler<TestTask, TestTaskHandler>();
+                        .MapTaskHandler<SuccessTask, SuccessTaskHandler>()
+                        .MapTaskHandler<ErrorTask, ErrorTaskHandler>();
 
                 })
                 .Build();
@@ -47,11 +49,11 @@ namespace BrandUp.Worker.Executor.Tests
         }
 
         [Fact]
-        public async Task ExecuteCommand_Success()
+        public async Task ExecuteTask_Success()
         {
             Assert.True(taskExecutor.IsStarted);
 
-            var taskId = await taskService.PushTask(new TestTask());
+            var taskId = await taskService.PushTask(new SuccessTask());
 
             Thread.Sleep(1000);
 
@@ -60,13 +62,36 @@ namespace BrandUp.Worker.Executor.Tests
             Assert.Equal(0, taskExecutor.FaultedCommands);
             Assert.Equal(0, taskExecutor.CancelledCommands);
         }
+
+        [Fact]
+        public async Task ExecuteTask_Error()
+        {
+            Assert.True(taskExecutor.IsStarted);
+
+            var taskId = await taskService.PushTask(new ErrorTask());
+
+            Thread.Sleep(1000);
+
+            Assert.Equal(1, taskExecutor.ExecutedCommands);
+            Assert.Equal(0, taskExecutor.ExecutingCommands);
+            Assert.Equal(1, taskExecutor.FaultedCommands);
+            Assert.Equal(0, taskExecutor.CancelledCommands);
+        }
     }
 
-    public class TestTaskHandler : TaskHandler<TestTask>
+    public class SuccessTaskHandler : TaskHandler<SuccessTask>
     {
-        protected override Task OnWorkAsync(TestTask command, CancellationToken cancellationToken)
+        protected override Task OnWorkAsync(SuccessTask command, CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return Task.Delay(500);
+        }
+    }
+
+    public class ErrorTaskHandler : TaskHandler<ErrorTask>
+    {
+        protected override Task OnWorkAsync(ErrorTask command, CancellationToken cancellationToken)
+        {
+            throw new Exception("Error");
         }
     }
 }

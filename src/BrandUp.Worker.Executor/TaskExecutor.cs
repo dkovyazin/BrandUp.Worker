@@ -144,6 +144,18 @@ namespace BrandUp.Worker.Executor
             Interlocked.Increment(ref executedCommands);
             Interlocked.Increment(ref faultedCommands);
         }
+        async Task IJobExecutorContext.OnUnhandledError(JobTask job, Exception exception)
+        {
+            if (!_startedJobs.TryRemove(job.TaskId, out JobTask removed))
+                throw new InvalidOperationException();
+
+            await taskAllocator.ErrorTaskAsync(ExecutorId, job.TaskId, job.Elapsed, exception, CancellationToken.None);
+
+            removed.Dispose();
+
+            Interlocked.Increment(ref executedCommands);
+            Interlocked.Increment(ref faultedCommands);
+        }
 
         #endregion
 

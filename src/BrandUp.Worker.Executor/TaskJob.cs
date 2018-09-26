@@ -29,48 +29,48 @@ namespace BrandUp.Worker.Executor
             _stopwatch = Stopwatch.StartNew();
 
             _cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            Task.Factory.StartNew(WorkWait, _cancellation.Token, TaskCreationOptions.None, TaskScheduler.Current);
+            Task.Factory.StartNew(Start, _cancellation.Token, TaskCreationOptions.None, TaskScheduler.Current);
         }
 
-        private void WorkWait()
+        private void Start()
         {
-            _cancellation.Token.ThrowIfCancellationRequested();
-
-            using (var task = WorkHandlerAsync())
+            using (var task = ExecuteAsync())
             {
                 task.Wait(_cancellation.Token);
 
                 if (task.IsFaulted)
                     throw new InvalidOperationException();
-                else if (task.IsCanceled)
-                {
-                    if (!_cancellation.IsCancellationRequested)
-                        throw new InvalidOperationException();
-                }
             }
         }
 
-        private async Task WorkHandlerAsync()
+        private async Task ExecuteAsync()
         {
             try
             {
-                await taskHandler.WorkAsync(taskModel, _cancellation.Token);
+                try
+                {
+                    await taskHandler.WorkAsync(taskModel, _cancellation.Token);
 
-                _stopwatch.Stop();
+                    _stopwatch.Stop();
 
-                await executorContext.OnSuccessJob(this);
+                    await executorContext.OnSuccessJob(this);
+                }
+                catch (OperationCanceledException)
+                {
+                    _stopwatch.Stop();
+
+                    await executorContext.OnCancelledJob(this);
+                }
+                catch (Exception exception)
+                {
+                    _stopwatch.Stop();
+
+                    await executorContext.OnErrorJob(this, exception);
+                }
             }
-            catch (OperationCanceledException)
+            catch (Exception unhandledException)
             {
-                _stopwatch.Stop();
-
-                await executorContext.OnCancelledJob(this);
-            }
-            catch (Exception exception)
-            {
-                _stopwatch.Stop();
-
-                await executorContext.OnErrorJob(this, exception);
+                await executorContext.OnUnhandledError(this, unhandledException);
             }
         }
 
@@ -90,5 +90,6 @@ namespace BrandUp.Worker.Executor
         Task OnSuccessJob(JobTask job);
         Task OnCancelledJob(JobTask job);
         Task OnErrorJob(JobTask job, Exception exception);
+        Task OnUnhandledError(JobTask job, Exception exception);
     }
 }

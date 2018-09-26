@@ -18,8 +18,8 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         private ConcurrentDictionary<Guid, TaskExecutor> executors = new ConcurrentDictionary<Guid, TaskExecutor>();
         private ConcurrentDictionary<Guid, CommandWaiting> executorWaitings = new ConcurrentDictionary<Guid, CommandWaiting>();
         private readonly TimeSpan defaultCommandWaitingTimeout = TimeSpan.FromSeconds(30);
-        private readonly int maxCommandsPerExecutor = 10;
-        private int countExecutingCommands = 0;
+        private readonly int maxTasksPerExecutor = 10;
+        private int countExecutingTasks = 0;
         private readonly ITaskRepository taskRepository;
 
         #endregion
@@ -30,7 +30,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
         public TimeSpan DefaultCommandWaitingTimeout => defaultCommandWaitingTimeout;
         public int CountExecutors => executors.Count;
         public int CountExecutorWaitings => executorWaitings.Count;
-        public int CountCommandExecuting => countExecutingCommands;
+        public int CountCommandExecuting => countExecutingTasks;
         public int CountCommandInQueue => commandQueue.Count;
 
         #endregion
@@ -45,7 +45,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (optionsValue.DefaultTaskWaitingTimeout > TimeSpan.Zero)
                 defaultCommandWaitingTimeout = optionsValue.DefaultTaskWaitingTimeout;
             if (optionsValue.MaxTasksPerExecutor > 0)
-                maxCommandsPerExecutor = optionsValue.MaxTasksPerExecutor;
+                maxTasksPerExecutor = optionsValue.MaxTasksPerExecutor;
 
             MetadataManager = metadataManager ?? throw new ArgumentNullException(nameof(metadataManager));
             this.taskRepository = taskRepository ?? throw new ArgumentNullException(nameof(taskRepository));
@@ -66,7 +66,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             var taskId = Guid.NewGuid();
             var commandContainer = new TaskContainer(taskId, taskModel);
 
-            taskRepository.PushTask(taskId, taskModel, DateTime.UtcNow);
+            taskRepository.PushTaskAsync(taskId, taskModel, DateTime.UtcNow);
 
             isStarted = TryCommandExecute(commandContainer, out TaskExecutor executor);
             if (isStarted)
@@ -92,7 +92,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
                 if (!executorWaitings.TryRemove(workerWaiting.Executor.ExecutorId, out CommandWaiting waiting))
                     continue;
 
-                taskRepository.TaskStarted(taskContainer.TaskId, waiting.Executor.ExecutorId, DateTime.UtcNow);
+                taskRepository.TaskStartedAsync(taskContainer.TaskId, waiting.Executor.ExecutorId, DateTime.UtcNow);
 
                 if (waiting.SendTask(taskContainer))
                 {
@@ -100,7 +100,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
                     return true;
                 }
                 else
-                    taskRepository.TaskDefered(taskContainer.TaskId);
+                    taskRepository.TaskDeferedAsync(taskContainer.TaskId);
 
                 waiting.Dispose();
             }
@@ -169,9 +169,9 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             {
                 executor.AddCommand(command);
 
-                await taskRepository.TaskStarted(command.TaskId, executorId, utcNow);
+                await taskRepository.TaskStartedAsync(command.TaskId, executorId, utcNow);
 
-                Interlocked.Increment(ref countExecutingCommands);
+                Interlocked.Increment(ref countExecutingTasks);
             }
 
             return WaitCommandsResult.SuccessResult(tasksToExecute.Select(it => new CommandToExecute(it.TaskId, it.Task)).ToList());
@@ -186,11 +186,11 @@ namespace BrandUp.Worker.Allocator.Infrastructure
                 {
                     commandsToExecute.Add(task);
 
-                    if (commandsToExecute.Count >= maxCommandsPerExecutor)
+                    if (commandsToExecute.Count >= maxTasksPerExecutor)
                         break;
                 }
 
-                if (commandsToExecute.Count >= maxCommandsPerExecutor)
+                if (commandsToExecute.Count >= maxTasksPerExecutor)
                     break;
             }
 
@@ -211,9 +211,11 @@ namespace BrandUp.Worker.Allocator.Infrastructure
 
             timeoutCancellation.Token.Register(() =>
             {
-                executorWaitings.TryRemove(executor.ExecutorId, out CommandWaiting removed);
-                removed.End();
-                removed.Dispose();
+                if (executorWaitings.TryRemove(executor.ExecutorId, out CommandWaiting removed))
+                {
+                    removed.End();
+                    removed.Dispose();
+                }
             });
 
             return commandWaiting;
@@ -226,7 +228,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (!executor.TryRemoveCommand(commandId, out TaskContainer command))
                 return false;
 
-            Interlocked.Decrement(ref countExecutingCommands);
+            Interlocked.Decrement(ref countExecutingTasks);
 
             commandQueue.Enqueue(command);
 
@@ -246,7 +248,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
                 return false;
             }
 
-            Interlocked.Decrement(ref countExecutingCommands);
+            Interlocked.Decrement(ref countExecutingTasks);
 
             command = commandContainer.Task;
             return true;
@@ -277,7 +279,7 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             return result.Commands.Select(it => new TaskToExecute { TaskId = it.CommandId, Task = it.Command });
         }
 
-        public Task SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken)
+        public async Task SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();
@@ -285,16 +287,22 @@ namespace BrandUp.Worker.Allocator.Infrastructure
             if (!executor.TryRemoveCommand(taskId, out TaskContainer command))
                 throw new ArgumentException();
 
-            Interlocked.Decrement(ref countExecutingCommands);
+            Interlocked.Decrement(ref countExecutingTasks);
 
-            taskRepository.TaskDone(taskId, executingTime, DateTime.UtcNow);
-
-            return Task.CompletedTask;
+            await taskRepository.TaskDoneAsync(taskId, executingTime, DateTime.UtcNow);
         }
 
-        Task ITaskAllocator.ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken)
+        public async Task ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            if (!executors.TryGetValue(executorId, out TaskExecutor executor))
+                throw new ArgumentException();
+
+            if (!executor.TryRemoveCommand(taskId, out TaskContainer command))
+                throw new ArgumentException();
+
+            Interlocked.Decrement(ref countExecutingTasks);
+
+            await taskRepository.TaskErrorAsync(taskId, executingTime, DateTime.UtcNow);
         }
 
         #region IDisposable members

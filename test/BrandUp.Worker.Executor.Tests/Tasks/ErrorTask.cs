@@ -1,7 +1,7 @@
 ﻿namespace BrandUp.Worker.Tasks
 {
     [Task]
-    public class TestTask
+    public class ErrorTask
     {
     }
 }
