@@ -138,30 +138,16 @@ namespace BrandUp.Worker.Allocator
         {
             var result = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
 
-            var w = new System.Diagnostics.Stopwatch();
-            w.Start();
-
             using (var cancellation = new CancellationTokenSource())
             {
-                var task = Task.Run(() =>
-                {
-                    allocator.WaitTasksAsync(result.ExecutorId, cancellation.Token).Wait();
-                });
+                var task = Task.Run(() => allocator.WaitTasksAsync(result.ExecutorId, cancellation.Token));
 
-                await Task.Delay(TimeSpan.FromSeconds(1));
+                await Task.Delay(200);
 
                 cancellation.Cancel();
 
-                w.Stop();
-
-                await Task.Delay(TimeSpan.FromSeconds(1));
-
-                Assert.True(task.IsCompleted);
+                Assert.Equal(0, allocator.CountExecutorWaitings);
             }
-
-            Assert.True(w.Elapsed >= TimeSpan.FromSeconds(1));
-            Assert.True(w.Elapsed < TimeSpan.FromSeconds(2));
-            Assert.Equal(0, allocator.CountExecutorWaitings);
         }
 
         [Fact]
