@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BrandUp.Worker.Common\BrandUp.Worker.Common.csproj" />
+    <ProjectReference Include="..\BrandUp.Worker.Executor\BrandUp.Worker.Executor.csproj" />
   </ItemGroup>
 
 </Project>

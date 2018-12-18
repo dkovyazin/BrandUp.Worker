@@ -15,7 +15,7 @@ namespace BrandUp.Worker.Tasks
 
         public Task<Guid> PushTask(object taskModel)
         {
-            return taskAllocator.PushTask(taskModel);
+            return taskAllocator.PushTaskAsync(taskModel);
         }
     }
 }

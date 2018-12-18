@@ -231,7 +231,7 @@ namespace BrandUp.Worker.Allocator
 
         #region ITaskAllocator members
 
-        Task<Guid> ITaskAllocator.PushTask(object taskModel)
+        Task<Guid> ITaskAllocator.PushTaskAsync(object taskModel)
         {
             var taskId = PushTask(taskModel, out bool isStarted, out Guid executorId);
             return Task.FromResult(taskId);

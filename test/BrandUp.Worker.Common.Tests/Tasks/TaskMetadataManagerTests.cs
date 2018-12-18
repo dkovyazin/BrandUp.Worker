@@ -8,18 +8,18 @@ namespace BrandUp.Worker.Tasks
     {
         private readonly ServiceProvider serviceProvider;
         private readonly IServiceScope serviceScope;
-        private readonly ITaskMetadataManager manager;
+        private readonly ITaskMetadataManager metadataManager;
 
         public TaskMetadataManagerTests()
         {
             var services = new ServiceCollection();
-            services.AddWorker()
+            services.AddWorkerCore()
                 .AddTaskType(typeof(TestTask));
 
             serviceProvider = services.BuildServiceProvider();
             serviceScope = serviceProvider.CreateScope();
 
-            manager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
+            metadataManager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
         }
 
         void IDisposable.Dispose()
@@ -31,7 +31,7 @@ namespace BrandUp.Worker.Tasks
         [Fact]
         public void HasTaskType()
         {
-            Assert.True(manager.HasTaskType(typeof(TestTask)));
+            Assert.True(metadataManager.HasTaskType(typeof(TestTask)));
         }
 
         [Fact]
@@ -39,7 +39,7 @@ namespace BrandUp.Worker.Tasks
         {
             var task = new TestTask();
 
-            var taskMetadata = manager.FindTaskMetadata(task);
+            var taskMetadata = metadataManager.FindTaskMetadata(task);
 
             Assert.NotNull(taskMetadata);
             Assert.Equal(task.GetType(), taskMetadata.TaskType);
@@ -50,7 +50,7 @@ namespace BrandUp.Worker.Tasks
         {
             var task = new TestTask();
 
-            var taskMetadata = manager.FindTaskMetadata(task.GetType());
+            var taskMetadata = metadataManager.FindTaskMetadata(task.GetType());
 
             Assert.NotNull(taskMetadata);
             Assert.Equal(task.GetType(), taskMetadata.TaskType);
@@ -59,7 +59,7 @@ namespace BrandUp.Worker.Tasks
         [Fact]
         public void FindTaskMetadataByName()
         {
-            var taskMetadata = manager.FindTaskMetadata("Test");
+            var taskMetadata = metadataManager.FindTaskMetadata("Test");
 
             Assert.NotNull(taskMetadata);
             Assert.Equal("Test", taskMetadata.TaskName);
@@ -70,9 +70,9 @@ namespace BrandUp.Worker.Tasks
         {
             var task = new TestTask();
 
-            var taskMetadata = manager.FindTaskMetadata(task);
+            var taskMetadata = metadataManager.FindTaskMetadata(task);
 
-            Assert.Contains(taskMetadata, manager.Tasks);
+            Assert.Contains(taskMetadata, metadataManager.Tasks);
         }
     }
 

@@ -5,11 +5,11 @@ using System.Reflection;
 
 namespace BrandUp.Worker.Builder
 {
-    public class WorkerBuilder : IWorkerBuilder
+    public class WorkerBuilderCore : IWorkerBuilderCore
     {
         private readonly TaskMetadataManager taskMetadataManager = new TaskMetadataManager();
 
-        public WorkerBuilder(IServiceCollection services)
+        public WorkerBuilderCore(IServiceCollection services)
         {
             Services = services ?? throw new ArgumentNullException(nameof(services));
 
@@ -25,7 +25,7 @@ namespace BrandUp.Worker.Builder
             services.AddSingleton<ITaskMetadataManager>(taskMetadataManager);
         }
 
-        public IWorkerBuilder AddTaskAssembly(Assembly assembly)
+        public IWorkerBuilderCore AddTaskAssembly(Assembly assembly)
         {
             if (assembly == null)
                 throw new ArgumentNullException(nameof(assembly));
@@ -41,7 +41,7 @@ namespace BrandUp.Worker.Builder
 
             return this;
         }
-        public IWorkerBuilder AddTaskType(Type taskType)
+        public IWorkerBuilderCore AddTaskType(Type taskType)
         {
             taskMetadataManager.AddTaskType(taskType);
 
@@ -49,12 +49,12 @@ namespace BrandUp.Worker.Builder
         }
     }
 
-    public interface IWorkerBuilder
+    public interface IWorkerBuilderCore
     {
         ITaskMetadataManager TaskMetadataManager { get; }
         IServiceCollection Services { get; }
-        IWorkerBuilder AddTaskAssembly(Assembly assembly);
-        IWorkerBuilder AddTaskType(Type taskType);
+        IWorkerBuilderCore AddTaskAssembly(Assembly assembly);
+        IWorkerBuilderCore AddTaskType(Type taskType);
     }
 
     public class WorkerOptions

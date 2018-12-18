@@ -19,7 +19,7 @@ namespace BrandUp.Worker.Allocator
         public TaskAllocatorAfterRestoreTests()
         {
             var services = new ServiceCollection();
-            services.AddWorker()
+            services.AddWorkerCore()
                 .AddTaskType(typeof(TestTask))
                 .AddAllocator(options =>
                 {

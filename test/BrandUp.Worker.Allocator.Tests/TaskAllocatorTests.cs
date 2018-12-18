@@ -14,13 +14,13 @@ namespace BrandUp.Worker.Allocator
     {
         private readonly ServiceProvider serviceProvider;
         private readonly IServiceScope serviceScope;
-        private readonly ITaskMetadataManager manager;
+        private readonly ITaskMetadataManager metadataManager;
         private readonly TaskAllocator allocator;
 
         public TaskAllocatorTests()
         {
             var services = new ServiceCollection();
-            services.AddWorker()
+            services.AddWorkerCore()
                 .AddTaskType(typeof(TestTask))
                 .AddAllocator(options =>
                 {
@@ -30,8 +30,8 @@ namespace BrandUp.Worker.Allocator
             serviceProvider = services.BuildServiceProvider();
             serviceScope = serviceProvider.CreateScope();
 
-            manager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
-            allocator = new TaskAllocator(manager, new MemoryTaskRepository(), serviceScope.ServiceProvider.GetService<IOptions<TaskAllocatorOptions>>());
+            metadataManager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
+            allocator = new TaskAllocator(metadataManager, new MemoryTaskRepository(), serviceScope.ServiceProvider.GetService<IOptions<TaskAllocatorOptions>>());
         }
 
         void IDisposable.Dispose()
@@ -44,7 +44,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public void ConnectExecutor()
         {
-            var result = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var result = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
 
             Assert.True(result.Success);
             Assert.NotEqual(result.ExecutorId, Guid.Empty);
@@ -61,7 +61,7 @@ namespace BrandUp.Worker.Allocator
             Assert.Equal(1, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);
 
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
             var tasksToExecute = await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None);
 
             Assert.NotEmpty(tasksToExecute);
@@ -72,7 +72,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task PushTask_AfterWaiting()
         {
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
 
             var task = Task.Run(() =>
             {
@@ -94,7 +94,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task CancelHandlerWaitsAfterDisposing()
         {
-            var commandNames = manager.Tasks.Select(it => it.TaskName).ToArray();
+            var commandNames = metadataManager.Tasks.Select(it => it.TaskName).ToArray();
             var workerConnectionResult = allocator.ConnectExecutor(new ExecutorOptions(commandNames));
 
             var task = Task.Run(() =>
@@ -117,7 +117,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task WaitTasks_DefaultTimeout()
         {
-            var result = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var result = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
 
             var w = new System.Diagnostics.Stopwatch();
             w.Start();
@@ -136,7 +136,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task WaitTasks_Cancel()
         {
-            var result = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var result = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
 
             using (var cancellation = new CancellationTokenSource())
             {
@@ -153,7 +153,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task WaitTasks_ReturnOneCommand()
         {
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
             var commandId = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();
@@ -168,7 +168,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task WaitTasks_ReturnSeveralCommand()
         {
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
             var commandId1 = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
             var commandId2 = allocator.PushTask(new TestTask(), out isStarted, out executorId);
 
@@ -185,7 +185,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task WaitTasks_TimeoutWaitingToStart()
         {
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
             var commandId1 = allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             await Task.Delay(500);
@@ -200,7 +200,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task WaitTasks_Cycle()
         {
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
 
             int i;
             for (i = 1; i <= 2; i++)
@@ -214,7 +214,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task SuccessTask()
         {
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
             allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();
@@ -228,7 +228,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task ErrorTask()
         {
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
             allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();
@@ -242,7 +242,7 @@ namespace BrandUp.Worker.Allocator
         [Fact]
         public async Task DeferTask()
         {
-            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(manager.Tasks.Select(it => it.TaskName).ToArray()));
+            var executorConnection = allocator.ConnectExecutor(new ExecutorOptions(metadataManager.Tasks.Select(it => it.TaskName).ToArray()));
             allocator.PushTask(new TestTask(), out bool isStarted, out Guid executorId);
 
             var tasksToExecute = (await allocator.WaitTasksAsync(executorConnection.ExecutorId, CancellationToken.None)).ToList();

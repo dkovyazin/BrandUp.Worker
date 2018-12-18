@@ -2,7 +2,7 @@
 {
     public static class WorkerBuilderExtensions
     {
-        public static IWorkerBuilder AddTaskType<TTask>(this IWorkerBuilder builder)
+        public static IWorkerBuilderCore AddTaskType<TTask>(this IWorkerBuilderCore builder)
         {
             builder.AddTaskType(typeof(TTask));
             return builder;

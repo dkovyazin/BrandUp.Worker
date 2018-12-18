@@ -5,19 +5,19 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     public static class ServiceCollectionExtensions
     {
-        public static IWorkerBuilder AddWorker(this IServiceCollection services)
+        public static IWorkerBuilderCore AddWorkerCore(this IServiceCollection services)
         {
-            return AddWorker(services, (options) => { });
+            return AddWorkerCore(services, (options) => { });
         }
 
-        public static IWorkerBuilder AddWorker(this IServiceCollection services, Action<WorkerOptions> setupAction)
+        public static IWorkerBuilderCore AddWorkerCore(this IServiceCollection services, Action<WorkerOptions> setupAction)
         {
             if (services == null)
                 throw new ArgumentNullException(nameof(services));
 
             services.Configure(setupAction);
 
-            return new WorkerBuilder(services);
+            return new WorkerBuilderCore(services);
         }
     }
 }

@@ -2,7 +2,7 @@
 
 namespace Microsoft.Extensions.DependencyInjection
 {
-    public static class IServiceCollectionExtensions
+    internal static class IServiceCollectionExtensions
     {
         public static void AddTaskHandler<TTask, THandler>(this IServiceCollection services)
             where TTask : class, new()

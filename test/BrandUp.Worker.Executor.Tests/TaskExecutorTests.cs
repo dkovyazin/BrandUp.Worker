@@ -20,19 +20,26 @@ namespace BrandUp.Worker.Executor.Tests
             host = new HostBuilder()
                 .ConfigureServices((hostContext, services) =>
                 {
-                    var workerBuilder = services.AddWorker()
+                    //var worker = services.AddWorkerAllocator(options =>
+                    //    {
+                    //        options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(3);
+                    //    })
+                    //    .AddTaskType<SuccessTask>()
+                    //    .AddTaskType<ErrorTask>()
+                    //    .AddTaskType<TimeoutTask>();
+
+                    services.AddWorkerCore()
                         .AddTaskType<SuccessTask>()
                         .AddTaskType<ErrorTask>()
                         .AddTaskType<TimeoutTask>()
                         .AddAllocator(options =>
                         {
                             options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(3);
-                        });
-
-                    workerBuilder.AddExecutor()
-                        .MapTaskHandler<SuccessTask, SuccessTaskHandler>()
-                        .MapTaskHandler<ErrorTask, ErrorTaskHandler>()
-                        .MapTaskHandler<TimeoutTask, TimeoutTaskHandler>();
+                        })
+                        .AddExecutor()
+                            .MapTaskHandler<SuccessTask, SuccessTaskHandler>()
+                            .MapTaskHandler<ErrorTask, ErrorTaskHandler>()
+                            .MapTaskHandler<TimeoutTask, TimeoutTaskHandler>();
 
                 })
                 .Build();

@@ -7,10 +7,10 @@ namespace BrandUp.Worker.Builder
 {
     public class WorkerExecutorBuilder : IWorkerExecutorBuilder, ITaskHandlerManager
     {
-        private readonly IWorkerBuilder workerBuilder;
+        private readonly IWorkerBuilderCore workerBuilder;
         private readonly List<Type> taskTypes = new List<Type>();
 
-        public WorkerExecutorBuilder(IWorkerBuilder workerBuilder)
+        public WorkerExecutorBuilder(IWorkerBuilderCore workerBuilder)
         {
             this.workerBuilder = workerBuilder ?? throw new ArgumentNullException(nameof(workerBuilder));
 
