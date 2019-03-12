@@ -22,7 +22,7 @@ namespace BrandUp.Worker.Allocator
             var services = new ServiceCollection();
             services.AddWorkerCore()
                 .AddTaskType(typeof(TestTask))
-                .AddAllocator(options =>
+                .AddAllocatorHost(options =>
                 {
                     options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
                 });

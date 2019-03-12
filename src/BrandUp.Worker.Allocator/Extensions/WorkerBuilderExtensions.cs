@@ -7,12 +7,12 @@ namespace BrandUp.Worker.Builder
 {
     public static class WorkerBuilderExtensions
     {
-        public static IWorkerBuilderCore AddAllocator(this IWorkerBuilderCore builder)
+        public static IWorkerBuilderCore AddAllocatorHost(this IWorkerBuilderCore builder)
         {
-            return builder.AddAllocator(options => { });
+            return builder.AddAllocatorHost(options => { });
         }
 
-        public static IWorkerBuilderCore AddAllocator(this IWorkerBuilderCore builder, Action<TaskAllocatorOptions> setupAction)
+        public static IWorkerBuilderCore AddAllocatorHost(this IWorkerBuilderCore builder, Action<TaskAllocatorOptions> setupAction)
         {
             builder.Services.Configure(setupAction);
             builder.Services.AddSingleton<ITaskRepository, DefaultTaskRepository>();

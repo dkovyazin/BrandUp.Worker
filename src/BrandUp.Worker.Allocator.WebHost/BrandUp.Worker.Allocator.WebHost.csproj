@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <RootNamespace>BrandUp.Worker.Allocator</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BrandUp.Worker.Allocator\BrandUp.Worker.Allocator.csproj" />
+    <ProjectReference Include="..\BrandUp.Worker.Common\BrandUp.Worker.Common.csproj" />
+  </ItemGroup>
+
+</Project>
