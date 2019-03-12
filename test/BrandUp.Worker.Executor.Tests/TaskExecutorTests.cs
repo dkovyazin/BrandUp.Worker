@@ -40,6 +40,8 @@ namespace BrandUp.Worker.Executor.Tests
             taskExecutor = host.Services.GetService<TaskExecutor>();
         }
 
+        #region IAsyncLifetime members
+
         Task IAsyncLifetime.InitializeAsync()
         {
             return host.StartAsync();
@@ -48,6 +50,10 @@ namespace BrandUp.Worker.Executor.Tests
         {
             return host.StopAsync();
         }
+
+        #endregion
+
+        #region Test methods
 
         [Fact]
         public async Task ExecuteTask_Success()
@@ -112,29 +118,7 @@ namespace BrandUp.Worker.Executor.Tests
             Assert.Equal(0, taskExecutor.FaultedCommands);
             Assert.Equal(1, taskExecutor.CancelledCommands);
         }
-    }
 
-    public class SuccessTaskHandler : TaskHandler<SuccessTask>
-    {
-        protected override Task OnWorkAsync(SuccessTask command, CancellationToken cancellationToken)
-        {
-            return Task.Delay(500, cancellationToken);
-        }
-    }
-
-    public class TimeoutTaskHandler : TaskHandler<TimeoutTask>
-    {
-        protected override Task OnWorkAsync(TimeoutTask command, CancellationToken cancellationToken)
-        {
-            return Task.Delay(1000, cancellationToken);
-        }
-    }
-
-    public class ErrorTaskHandler : TaskHandler<ErrorTask>
-    {
-        protected override Task OnWorkAsync(ErrorTask command, CancellationToken cancellationToken)
-        {
-            throw new Exception("Error");
-        }
+        #endregion
     }
 }

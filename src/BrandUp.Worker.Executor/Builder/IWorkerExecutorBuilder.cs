@@ -32,7 +32,8 @@ namespace BrandUp.Worker.Builder
                 throw new ArgumentException();
 
             taskTypes.Add(typeof(TTask));
-            Services.AddTaskHandler<TTask, THandler>();
+
+            Services.AddTransient<TaskHandler<TTask>, THandler>();
 
             return this;
         }
