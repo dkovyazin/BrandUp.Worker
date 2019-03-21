@@ -4,10 +4,15 @@
     <TargetFramework>netcoreapp2.2</TargetFramework>
     <RootNamespace>BrandUp.Worker.Allocator</RootNamespace>
     <LangVersion>7.1</LangVersion>
+    <PackageProjectUrl>https://github.com/dkovyazin/BrandUp.Worker</PackageProjectUrl>
+    <Company>BrandUp.online</Company>
+    <RepositoryUrl>https://github.com/dkovyazin/BrandUp.Worker</RepositoryUrl>
+    <Authors>Dmitry Kovyazin</Authors>
+    <Product>BrandUp.Worker</Product>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>

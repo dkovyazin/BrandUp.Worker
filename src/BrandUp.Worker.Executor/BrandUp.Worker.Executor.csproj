@@ -1,8 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>7.1</LangVersion>
+    <PackageProjectUrl>https://github.com/dkovyazin/BrandUp.Worker</PackageProjectUrl>
+    <Company>BrandUp.online</Company>
+    <RepositoryUrl>https://github.com/dkovyazin/BrandUp.Worker</RepositoryUrl>
+    <Authors>Dmitry Kovyazin</Authors>
+    <Product>BrandUp.Worker</Product>
   </PropertyGroup>
 
   <ItemGroup>
