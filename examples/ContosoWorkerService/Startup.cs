@@ -18,13 +18,12 @@ namespace ContosoWorker.Service
 
         public void ConfigureServices(IServiceCollection services)
         {
-            var workerBuilder = services
+            services
                 .AddWorkerAllocator(options =>
                 {
                     options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
-                });
-
-            workerBuilder.AddTaskType<Tasks.TestTask>();
+                })
+                .AddTaskType<Tasks.TestTask>();
         }
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)

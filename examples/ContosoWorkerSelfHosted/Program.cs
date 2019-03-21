@@ -24,13 +24,13 @@ namespace ContosoWorker.SelfHosted
                 })
                 .ConfigureServices((hostContext, services) =>
                 {
-                    var workerBuilder = services.AddWorkerAllocator(options =>
-                    {
-                        options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
-                    })
-                        .AddTaskType<Tasks.TestTask>();
-
-                    workerBuilder.AddExecutor()
+                    services
+                        .AddWorkerAllocator(options =>
+                        {
+                            options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
+                        })
+                        .AddTaskType<Tasks.TestTask>()
+                        .AddExecutor()
                         .MapTaskHandler<Tasks.TestTask, Handlers.TestTaskHandler>();
                 });
 

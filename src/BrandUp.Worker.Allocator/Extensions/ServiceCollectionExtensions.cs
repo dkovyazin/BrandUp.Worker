@@ -8,6 +8,11 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     public static class ServiceCollectionExtensions
     {
+        public static IWorkerBuilderCore AddWorkerAllocator(this IServiceCollection services)
+        {
+            return services.AddWorkerAllocator(options => { });
+        }
+
         public static IWorkerBuilderCore AddWorkerAllocator(this IServiceCollection services, Action<TaskAllocatorOptions> setupAction)
         {
             var builder = services.AddWorkerCore();

@@ -26,8 +26,11 @@ namespace ContosoWorker.Node
                 {
                     var executorBuilder = services.AddWorkerExecutorHost(new Uri("https://localhost:44338/"));
 
-                    executorBuilder.AddTaskType<Tasks.TestTask>();
-                    executorBuilder.MapTaskHandler<Tasks.TestTask, Handlers.TestTaskHandler>();
+                    executorBuilder
+                        .AddTaskType<Tasks.TestTask>();
+
+                    executorBuilder
+                        .MapTaskHandler<Tasks.TestTask, Handlers.TestTaskHandler>();
                 });
 
             await hostBuilder.RunConsoleAsync();
