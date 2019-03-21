@@ -1,7 +1,6 @@
 ﻿using BrandUp.Worker.Allocator;
 using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -74,7 +73,11 @@ namespace BrandUp.Worker.Executor
             var countWaits = 0;
             while (!cancellationToken.IsCancellationRequested)
             {
-                var commandsToExecute = await taskAllocator.WaitTasksAsync(ExecutorId, cancellationToken);
+                Console.WriteLine("Waiting tasks...");
+
+                var commandsToExecute = (await taskAllocator.WaitTasksAsync(ExecutorId, cancellationToken)).ToArray();
+
+                Console.WriteLine($"Receiver tasks: {commandsToExecute.Length}");
 
                 foreach (var taskToExecute in commandsToExecute)
                     StartJob(taskToExecute, cancellationToken);
@@ -175,21 +178,6 @@ namespace BrandUp.Worker.Executor
                 TaskName = taskName;
                 HandlerType = handlerType;
             }
-        }
-    }
-
-    public class TaskExecutorHostService : BackgroundService
-    {
-        private readonly TaskExecutor executor;
-
-        public TaskExecutorHostService(TaskExecutor executor)
-        {
-            this.executor = executor ?? throw new ArgumentNullException(nameof(executor));
-        }
-
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            return executor.WorkAsync(stoppingToken);
         }
     }
 }

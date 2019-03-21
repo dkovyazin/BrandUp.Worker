@@ -85,7 +85,7 @@ namespace BrandUp.Worker.Allocator
 
             var taskMetadata = MetadataManager.FindTaskMetadata(taskModel);
             if (taskMetadata == null)
-                throw new ArgumentException();
+                throw new ArgumentException($"Тип модели задачи {taskModel.GetType().AssemblyQualifiedName} не зарегистрирован.", nameof(taskModel));
 
             var taskId = Guid.NewGuid();
             var taskContainer = new TaskContainer(taskId, taskModel, DateTime.UtcNow);
@@ -231,7 +231,7 @@ namespace BrandUp.Worker.Allocator
 
         #region ITaskAllocator members
 
-        Task<Guid> ITaskAllocator.PushTaskAsync(object taskModel)
+        Task<Guid> ITaskAllocator.PushTaskAsync(object taskModel, CancellationToken cancellationToken)
         {
             var taskId = PushTask(taskModel, out bool isStarted, out Guid executorId);
             return Task.FromResult(taskId);

@@ -1,5 +1,4 @@
-﻿using BrandUp.Worker.Builder;
-using BrandUp.Worker.Tasks;
+﻿using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System;
@@ -20,12 +19,12 @@ namespace BrandUp.Worker.Allocator
         public TaskAllocatorTests()
         {
             var services = new ServiceCollection();
-            services.AddWorkerCore()
-                .AddTaskType(typeof(TestTask))
-                .AddAllocatorHost(options =>
+            services
+                .AddWorkerAllocator(options =>
                 {
                     options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
-                });
+                })
+                .AddTaskType(typeof(TestTask));
 
             serviceProvider = services.BuildServiceProvider();
             serviceScope = serviceProvider.CreateScope();

@@ -1,7 +1,6 @@
 ﻿using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using System.Reflection;
 
 namespace BrandUp.Worker.Builder
 {
@@ -16,49 +15,30 @@ namespace BrandUp.Worker.Builder
             AddCoreServices(services);
         }
 
-        public ITaskMetadataManager TaskMetadataManager => taskMetadataManager;
-        public IServiceCollection Services { get; }
-
         private void AddCoreServices(IServiceCollection services)
         {
-            services.AddSingleton(typeof(ITaskTypeResolver), this);
             services.AddSingleton<ITaskMetadataManager>(taskMetadataManager);
+            services.AddSingleton<Remoting.IContractSerializer, Remoting.JsonContractSerializer>();
         }
 
-        public IWorkerBuilderCore AddTaskAssembly(Assembly assembly)
-        {
-            if (assembly == null)
-                throw new ArgumentNullException(nameof(assembly));
+        #region IWorkerBuilderCore members
 
-            var assemblyTypes = assembly.GetTypes();
-            foreach (var type in assemblyTypes)
-            {
-                if (!TaskMetadata.CheckTaskType(type))
-                    continue;
-
-                taskMetadataManager.AddTaskType(type);
-            }
-
-            return this;
-        }
+        public IServiceCollection Services { get; }
+        public ITaskMetadataManager TasksMetadata => taskMetadataManager;
         public IWorkerBuilderCore AddTaskType(Type taskType)
         {
             taskMetadataManager.AddTaskType(taskType);
 
             return this;
         }
+
+        #endregion
     }
 
     public interface IWorkerBuilderCore
     {
-        ITaskMetadataManager TaskMetadataManager { get; }
         IServiceCollection Services { get; }
-        IWorkerBuilderCore AddTaskAssembly(Assembly assembly);
+        ITaskMetadataManager TasksMetadata { get; }
         IWorkerBuilderCore AddTaskType(Type taskType);
-    }
-
-    public class WorkerOptions
-    {
-
     }
 }

@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netcoreapp2.2</TargetFramework>
     <RootNamespace>BrandUp.Worker.Allocator</RootNamespace>
+    <LangVersion>7.1</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BrandUp.Worker.Allocator\BrandUp.Worker.Allocator.csproj" />
+    <ProjectReference Include="..\BrandUp.Worker.Client\BrandUp.Worker.Client.csproj" />
     <ProjectReference Include="..\BrandUp.Worker.Common\BrandUp.Worker.Common.csproj" />
   </ItemGroup>
 

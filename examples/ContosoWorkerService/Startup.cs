@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 
-namespace BrandUp.Worker.Allocator
+namespace ContosoWorker.Service
 {
     public class Startup
     {
@@ -18,24 +18,24 @@ namespace BrandUp.Worker.Allocator
 
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddWorkerCore()
-                .AddTaskType(typeof(TestTask))
-                .AddAllocatorHost(options =>
+            var workerBuilder = services
+                .AddWorkerAllocator(options =>
                 {
                     options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
                 });
 
-            //services.AddMvcCore();
+            workerBuilder.AddTaskType<Tasks.TestTask>();
         }
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
-            app.UseAllocatorHost();
-        }
-    }
+            if (env.IsDevelopment())
+                app.UseDeveloperExceptionPage();
+            else
+                app.UseHsts();
 
-    [Task(TimeoutWaitingToStartInMiliseconds = 100)]
-    public class TestTask
-    {
+            app.UseHttpsRedirection();
+            app.UseWorkerAllocator();
+        }
     }
 }

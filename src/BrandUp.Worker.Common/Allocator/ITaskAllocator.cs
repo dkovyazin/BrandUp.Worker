@@ -7,12 +7,12 @@ namespace BrandUp.Worker.Allocator
 {
     public interface ITaskAllocator
     {
-        Task<Guid> PushTaskAsync(object taskModel);
-        Task<Guid> SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken);
-        Task<IEnumerable<TaskToExecute>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken);
-        Task SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken);
-        Task ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken);
-        Task DeferTaskAsync(Guid executorId, Guid taskId, CancellationToken cancellationToken);
+        Task<Guid> PushTaskAsync(object taskModel, CancellationToken cancellationToken = default);
+        Task<Guid> SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken = default);
+        Task<IEnumerable<TaskToExecute>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken = default);
+        Task SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken = default);
+        Task ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken = default);
+        Task DeferTaskAsync(Guid executorId, Guid taskId, CancellationToken cancellationToken = default);
     }
 
     public class TaskToExecute

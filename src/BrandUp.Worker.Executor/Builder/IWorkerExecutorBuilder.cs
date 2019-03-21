@@ -1,4 +1,5 @@
 ﻿using BrandUp.Worker.Executor;
+using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -16,7 +17,7 @@ namespace BrandUp.Worker.Builder
 
             workerBuilder.Services.AddSingleton<ITaskHandlerManager>(this);
             workerBuilder.Services.AddSingleton<TaskExecutor>();
-            workerBuilder.Services.AddHostedService<TaskExecutorHostService>();
+            workerBuilder.Services.AddHostedService<Executor.Infrastructure.TaskExecutorBackgroundService>();
         }
 
         public IServiceCollection Services => workerBuilder.Services;
@@ -24,7 +25,7 @@ namespace BrandUp.Worker.Builder
             where TTask : class, new()
             where THandler : TaskHandler<TTask>
         {
-            var taskMetadata = workerBuilder.TaskMetadataManager.FindTaskMetadata<TTask>();
+            var taskMetadata = workerBuilder.TasksMetadata.FindTaskMetadata<TTask>();
             if (taskMetadata == null)
                 throw new ArgumentException();
 
@@ -32,18 +33,21 @@ namespace BrandUp.Worker.Builder
                 throw new ArgumentException();
 
             taskTypes.Add(typeof(TTask));
-
             Services.AddTransient<TaskHandler<TTask>, THandler>();
 
             return this;
         }
+        public IWorkerBuilderCore AddTaskType(Type taskType)
+        {
+            return workerBuilder.AddTaskType(taskType);
+        }
+        public ITaskMetadataManager TasksMetadata => workerBuilder.TasksMetadata;
 
         IEnumerable<Type> ITaskHandlerManager.TaskTypes => taskTypes;
     }
 
-    public interface IWorkerExecutorBuilder
+    public interface IWorkerExecutorBuilder : IWorkerBuilderCore
     {
-        IServiceCollection Services { get; }
         IWorkerExecutorBuilder MapTaskHandler<TTask, THandler>()
             where TTask : class, new()
             where THandler : TaskHandler<TTask>;
