@@ -3,7 +3,11 @@
 [![Build Status](https://dev.azure.com/brandup/BrandUp%20Core/_apis/build/status/BrandUp.Worker?branchName=master)](https://dev.azure.com/brandup/BrandUp%20Core/_build/latest?definitionId=14&branchName=master)
 
 ## Task definition
+
 Tasks are defined using the attribute TaskAttribute.
+
+Using NuGet package [BrandUp.Worker.Common](https://www.nuget.org/packages/BrandUp.Worker.Common/)
+
 ```
 [Task(Name = "Custom name", TimeoutWaitingToStartInMiliseconds = 100, ExecutionTimeout = 30000)]
 public class TestTask
@@ -13,6 +17,9 @@ public class TestTask
 ```
 
 ## Worker service startup
+
+Using NuGet package [BrandUp.Worker.Allocator.Host](https://www.nuget.org/packages/BrandUp.Worker.Allocator.Host/)
+
 ```
 public class Startup
 {
@@ -37,6 +44,9 @@ public class Startup
 ```
 
 ## Worker executor startup
+
+Using NuGet package [BrandUp.Worker.Executor.Host](https://www.nuget.org/packages/BrandUp.Worker.Executor.Host/)
+
 ```
 var executorBuilder = services.AddWorkerExecutorHost(new Uri("https://localhost:44338/"));
 
@@ -48,6 +58,9 @@ executorBuilder
 ```
 
 ## Worker self hosted startup
+
+Using NuGet packages [BrandUp.Worker.Allocator](https://www.nuget.org/packages/BrandUp.Worker.Allocator/) and [BrandUp.Worker.Executor](https://www.nuget.org/packages/BrandUp.Worker.Executor/)
+
 ```
 services
     .AddWorkerAllocator(options =>
