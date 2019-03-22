@@ -17,7 +17,6 @@ namespace BrandUp.Worker.Builder
 
             workerBuilder.Services.AddSingleton<ITaskHandlerManager>(this);
             workerBuilder.Services.AddSingleton<TaskExecutor>();
-            workerBuilder.Services.AddHostedService<Executor.Infrastructure.TaskExecutorBackgroundService>();
         }
 
         public IServiceCollection Services => workerBuilder.Services;

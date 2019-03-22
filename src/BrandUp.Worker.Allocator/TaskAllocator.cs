@@ -1,5 +1,6 @@
 ﻿using BrandUp.Worker.Allocator.Infrastructure;
 using BrandUp.Worker.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
@@ -14,7 +15,7 @@ namespace BrandUp.Worker.Allocator
     {
         #region Fields
 
-        private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
+        private CancellationTokenSource cancellation;
         private readonly TaskQueue commandQueue;
         private ConcurrentDictionary<Guid, TaskExecutor> executors = new ConcurrentDictionary<Guid, TaskExecutor>();
         private ConcurrentDictionary<Guid, CommandWaiting> executorWaitings = new ConcurrentDictionary<Guid, CommandWaiting>();
@@ -22,6 +23,7 @@ namespace BrandUp.Worker.Allocator
         private readonly int maxTasksPerExecutor = 10;
         private int countExecutingTasks = 0;
         private readonly ITaskRepository taskRepository;
+        private readonly ILogger logger;
 
         #endregion
 
@@ -36,7 +38,7 @@ namespace BrandUp.Worker.Allocator
 
         #endregion
 
-        public TaskAllocator(ITaskMetadataManager metadataManager, ITaskRepository taskRepository, IOptions<TaskAllocatorOptions> options)
+        public TaskAllocator(ITaskMetadataManager metadataManager, ITaskRepository taskRepository, IOptions<TaskAllocatorOptions> options, ILoggerFactory loggerFactory)
         {
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
@@ -51,13 +53,15 @@ namespace BrandUp.Worker.Allocator
             MetadataManager = metadataManager ?? throw new ArgumentNullException(nameof(metadataManager));
             this.taskRepository = taskRepository ?? throw new ArgumentNullException(nameof(taskRepository));
             commandQueue = new TaskQueue(metadataManager.Tasks.Select(it => it.TaskType).ToArray());
+
+            logger = loggerFactory.CreateLogger(typeof(TaskAllocator));
         }
 
         #region Methods
 
-        public async Task ResporeTasksAsync()
+        private async Task RestoreTasksAsync(CancellationToken cancellationToken = default)
         {
-            foreach (var taskState in await taskRepository.GetActualTasks())
+            foreach (var taskState in await taskRepository.GetActualTasksAsync(cancellationToken))
             {
                 var taskMetadata = MetadataManager.FindTaskMetadata(taskState.TaskModel);
                 if (taskMetadata == null)
@@ -90,7 +94,7 @@ namespace BrandUp.Worker.Allocator
             var taskId = Guid.NewGuid();
             var taskContainer = new TaskContainer(taskId, taskModel, DateTime.UtcNow);
 
-            taskRepository.PushTaskAsync(taskId, taskModel, DateTime.UtcNow);
+            taskRepository.PushTaskAsync(taskId, taskMetadata.TaskName, taskModel, DateTime.UtcNow);
 
             isStarted = TryCommandExecute(taskContainer, out TaskExecutor executor);
             if (isStarted)
@@ -134,7 +138,6 @@ namespace BrandUp.Worker.Allocator
             executor = null;
             return false;
         }
-
         public ConnectExecutorResult ConnectExecutor(ExecutorOptions options)
         {
             if (options == null)
@@ -145,21 +148,21 @@ namespace BrandUp.Worker.Allocator
             {
                 var commandMetadata = MetadataManager.FindTaskMetadata(commandTypeName);
                 if (commandMetadata == null)
-                    return ConnectExecutorResult.ErrorResult("Не найден один из типов команды.");
+                    return ConnectExecutorResult.ErrorResult($"Тип команды {commandTypeName} не зарегистрирован.");
 
                 commandTypes.Add(commandMetadata.TaskType);
             }
 
             if (commandTypes.Count == 0)
-                return ConnectExecutorResult.ErrorResult("Не указано ни одного типа команды.");
+                return ConnectExecutorResult.ErrorResult("Не указано ни одного типа команды для исполнителя.");
 
-            var handlerId = Guid.NewGuid();
-            var handler = new TaskExecutor(handlerId, commandTypes);
+            var executorId = Guid.NewGuid();
+            var executor = new TaskExecutor(executorId, commandTypes);
 
-            if (!executors.TryAdd(handlerId, handler))
-                return ConnectExecutorResult.ErrorResult("Не удалось зафиксировать подключение воркера.");
+            if (!executors.TryAdd(executorId, executor))
+                return ConnectExecutorResult.ErrorResult("Не удалось зафиксировать подключение исполнителя.");
 
-            return ConnectExecutorResult.SuccessResult(handlerId);
+            return ConnectExecutorResult.SuccessResult(executorId);
         }
 
         private async Task<List<TaskContainer>> FindTasksToExecuteAsync(TaskExecutor executor)
@@ -194,7 +197,7 @@ namespace BrandUp.Worker.Allocator
             {
                 try
                 {
-                    await taskRepository.TaskCancelledAsync(task.TaskId, "Timeout waiting to start.");
+                    await taskRepository.TaskCancelledAsync(task.TaskId, DateTime.UtcNow, "Timeout waiting to start.");
                     return true;
                 }
                 catch
@@ -213,7 +216,7 @@ namespace BrandUp.Worker.Allocator
 
             var commandWaiting = new CommandWaiting(executor, timeoutCancellation);
             if (!executorWaitings.TryAdd(executor.ExecutorId, commandWaiting))
-                throw new InvalidOperationException("Ожидание задач для исполнителя уже зарегистрировано.");
+                throw new InvalidOperationException($"Ожидание задач для исполнителя {executor.ExecutorId} уже зарегистрировано.");
 
             timeoutCancellation.Token.Register(() =>
             {
@@ -229,14 +232,33 @@ namespace BrandUp.Worker.Allocator
 
         #endregion
 
+        protected virtual Task OnStartAsync(CancellationToken stoppingToken) { return Task.CompletedTask; }
+
         #region ITaskAllocator members
 
-        Task<Guid> ITaskAllocator.PushTaskAsync(object taskModel, CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken stoppingToken)
+        {
+            cancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+            try
+            {
+                await RestoreTasksAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Не удалось восстановить задачи из репозитория.");
+
+                throw ex;
+            }
+
+            await OnStartAsync(stoppingToken);
+        }
+        public Task<Guid> PushTaskAsync(object taskModel, CancellationToken cancellationToken)
         {
             var taskId = PushTask(taskModel, out bool isStarted, out Guid executorId);
             return Task.FromResult(taskId);
         }
-        Task<Guid> ITaskAllocator.SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken)
+        public Task<Guid> SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken)
         {
             var result = ConnectExecutor(new ExecutorOptions(taskTypeNames));
             if (!result.Success)
@@ -282,7 +304,7 @@ namespace BrandUp.Worker.Allocator
 
             Interlocked.Decrement(ref countExecutingTasks);
 
-            await taskRepository.TaskDoneAsync(taskId, executingTime, DateTime.UtcNow);
+            await taskRepository.TaskSuccessAsync(taskId, executingTime, DateTime.UtcNow);
         }
         public async Task ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken)
         {
@@ -323,8 +345,12 @@ namespace BrandUp.Worker.Allocator
             {
                 if (disposing)
                 {
-                    cancellation.Cancel();
-                    cancellation.Dispose();
+                    if (cancellation != null)
+                    {
+                        if (!cancellation.IsCancellationRequested)
+                            cancellation.Cancel();
+                        cancellation.Dispose();
+                    }
                 }
 
                 _isDisposed = true;

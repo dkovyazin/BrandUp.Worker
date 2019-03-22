@@ -12,7 +12,7 @@ namespace BrandUp.Worker.Executor.Tests
     public class TaskExecutorTests : IAsyncLifetime
     {
         private readonly IHost host;
-        private readonly Allocator.ITaskAllocator taskService;
+        private readonly Allocator.ITaskAllocator allocator;
         private readonly TaskExecutor taskExecutor;
 
         public TaskExecutorTests()
@@ -27,7 +27,7 @@ namespace BrandUp.Worker.Executor.Tests
                         .AddTaskType<SuccessTask>()
                         .AddTaskType<ErrorTask>()
                         .AddTaskType<TimeoutTask>()
-                        .AddExecutor()
+                        .AddLocalExecutor()
                             .MapTaskHandler<SuccessTask, SuccessTaskHandler>()
                             .MapTaskHandler<ErrorTask, ErrorTaskHandler>()
                             .MapTaskHandler<TimeoutTask, TimeoutTaskHandler>();
@@ -35,7 +35,7 @@ namespace BrandUp.Worker.Executor.Tests
                 })
                 .Build();
 
-            taskService = host.Services.GetService<Allocator.ITaskAllocator>();
+            allocator = host.Services.GetService<Allocator.ITaskAllocator>();
             taskExecutor = host.Services.GetService<TaskExecutor>();
         }
 
@@ -59,7 +59,7 @@ namespace BrandUp.Worker.Executor.Tests
         {
             Assert.True(taskExecutor.IsStarted);
 
-            var taskId = await taskService.PushTaskAsync(new SuccessTask());
+            var taskId = await allocator.PushTaskAsync(new SuccessTask());
 
             Thread.Sleep(1000);
 
@@ -74,7 +74,7 @@ namespace BrandUp.Worker.Executor.Tests
         {
             Assert.True(taskExecutor.IsStarted);
 
-            var taskId = await taskService.PushTaskAsync(new ErrorTask());
+            var taskId = await allocator.PushTaskAsync(new ErrorTask());
 
             Thread.Sleep(1000);
 
@@ -89,7 +89,7 @@ namespace BrandUp.Worker.Executor.Tests
         {
             Assert.True(taskExecutor.IsStarted);
 
-            var taskId = await taskService.PushTaskAsync(new TimeoutTask());
+            var taskId = await allocator.PushTaskAsync(new TimeoutTask());
 
             await Task.Delay(300);
 
@@ -104,7 +104,7 @@ namespace BrandUp.Worker.Executor.Tests
         {
             Assert.True(taskExecutor.IsStarted);
 
-            var taskId = await taskService.PushTaskAsync(new SuccessTask());
+            var taskId = await allocator.PushTaskAsync(new SuccessTask());
 
             await Task.Delay(300);
 

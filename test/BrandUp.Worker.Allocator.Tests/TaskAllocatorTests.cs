@@ -1,6 +1,7 @@
-﻿using BrandUp.Worker.Tasks;
+﻿using BrandUp.Worker.Builder;
+using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Linq;
 using System.Threading;
@@ -9,36 +10,46 @@ using Xunit;
 
 namespace BrandUp.Worker.Allocator
 {
-    public class TaskAllocatorTests : IDisposable
+    public class TaskAllocatorTests : IAsyncLifetime
     {
-        private readonly ServiceProvider serviceProvider;
-        private readonly IServiceScope serviceScope;
+        private readonly IHost host;
         private readonly ITaskMetadataManager metadataManager;
         private readonly TaskAllocator allocator;
 
         public TaskAllocatorTests()
         {
-            var services = new ServiceCollection();
-            services
-                .AddWorkerAllocator(options =>
+            host = new HostBuilder()
+                .ConfigureServices((hostContext, services) =>
                 {
-                    options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
+                    services
+                        .AddWorkerAllocator(options =>
+                        {
+                            options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
+                        })
+                        .AddTaskType<TestTask>();
+
+                    services.AddSingleton<TaskAllocator>();
                 })
-                .AddTaskType(typeof(TestTask));
+                .Build();
 
-            serviceProvider = services.BuildServiceProvider();
-            serviceScope = serviceProvider.CreateScope();
-
-            metadataManager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
-            allocator = new TaskAllocator(metadataManager, new MemoryTaskRepository(), serviceScope.ServiceProvider.GetService<IOptions<TaskAllocatorOptions>>());
+            metadataManager = host.Services.GetRequiredService<ITaskMetadataManager>();
+            allocator = (TaskAllocator)host.Services.GetRequiredService<ITaskAllocator>();
         }
 
-        void IDisposable.Dispose()
+        #region IAsyncLifetime members
+
+        Task IAsyncLifetime.InitializeAsync()
         {
-            allocator.Dispose();
-            serviceScope.Dispose();
-            serviceProvider.Dispose();
+            return host.StartAsync();
         }
+        Task IAsyncLifetime.DisposeAsync()
+        {
+            return host.StopAsync();
+        }
+
+        #endregion
+
+        #region Test methods
 
         [Fact]
         public void ConnectExecutor()
@@ -251,5 +262,7 @@ namespace BrandUp.Worker.Allocator
             Assert.Equal(1, allocator.CountCommandInQueue);
             Assert.Equal(0, allocator.CountCommandExecuting);
         }
+
+        #endregion
     }
 }

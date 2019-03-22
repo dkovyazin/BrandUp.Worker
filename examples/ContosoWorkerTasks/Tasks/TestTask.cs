@@ -7,5 +7,6 @@ namespace ContosoWorker.Tasks
     public class TestTask
     {
         // Task properties
+        public string Title { get; set; }
     }
 }

@@ -1,24 +1,30 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BrandUp.Worker.Tasks
 {
     public class MemoryTaskRepository : ITaskRepository
     {
-        private readonly ConcurrentDictionary<Guid, TaskEntity> tasks = new ConcurrentDictionary<Guid, TaskEntity>();
+        private readonly ConcurrentDictionary<Guid, MemoryTaskEntity> tasks = new ConcurrentDictionary<Guid, MemoryTaskEntity>();
 
-        public Task<IEnumerable<TaskState>> GetActualTasks()
+        public IEnumerable<Guid> TaskIds => tasks.Keys;
+        public IEnumerable<MemoryTaskEntity> Tasks => tasks.Values;
+
+        public Task<IEnumerable<TaskState>> GetActualTasksAsync(CancellationToken cancellationToken = default)
         {
             var taskStates = new List<TaskState>();
-            foreach (var task in tasks.Values)
+            foreach (var task in tasks.Values.Where(it => (it.Execution == null) || (it.Execution.Status == TaskExecutionStatus.Started)))
             {
                 var taskState = new TaskState
                 {
                     TaskId = task.TaskId,
                     TaskModel = task.TaskModel,
-                    CreatedDate = task.CreatedDate
+                    CreatedDate = task.CreatedDate,
+                    EndDate = task.EndDate
                 };
 
                 if (task.Execution != null)
@@ -31,109 +37,125 @@ namespace BrandUp.Worker.Tasks
             }
             return Task.FromResult<IEnumerable<TaskState>>(taskStates);
         }
-        public Task PushTaskAsync(Guid taskId, object taskModel, DateTime createdDate)
+        public Task PushTaskAsync(Guid taskId, string taskTypeName, object taskModel, DateTime createdDate, CancellationToken cancellationToken = default)
         {
-            if (!tasks.TryAdd(taskId, new TaskEntity(taskId, createdDate, taskModel)))
+            if (!tasks.TryAdd(taskId, new MemoryTaskEntity(taskId, createdDate, taskTypeName, taskModel)))
                 throw new InvalidOperationException();
             return Task.CompletedTask;
         }
-        public Task TaskStartedAsync(Guid taskId, Guid executorId, DateTime startedDate)
+        public Task TaskStartedAsync(Guid taskId, Guid executorId, DateTime startedDate, CancellationToken cancellationToken = default)
         {
-            if (!tasks.TryGetValue(taskId, out TaskEntity task))
+            if (!tasks.TryGetValue(taskId, out MemoryTaskEntity task))
                 throw new InvalidOperationException();
 
             task.StartTask(executorId, startedDate);
 
             return Task.CompletedTask;
         }
-        public Task TaskDeferedAsync(Guid taskId)
+        public Task TaskDeferedAsync(Guid taskId, CancellationToken cancellationToken = default)
         {
-            if (!tasks.TryGetValue(taskId, out TaskEntity task))
+            if (!tasks.TryGetValue(taskId, out MemoryTaskEntity task))
                 throw new InvalidOperationException();
 
             task.DeferTask();
 
             return Task.CompletedTask;
         }
-        public Task TaskDoneAsync(Guid taskId, TimeSpan executingTime, DateTime doneDate)
+        public Task TaskSuccessAsync(Guid taskId, TimeSpan executingTime, DateTime doneDate, CancellationToken cancellationToken = default)
         {
-            if (!tasks.TryRemove(taskId, out TaskEntity task))
+            if (!tasks.TryGetValue(taskId, out MemoryTaskEntity task))
                 throw new InvalidOperationException();
 
-            task.Execution.Done(executingTime, doneDate);
+            task.SuccessTask(executingTime, doneDate);
 
             return Task.CompletedTask;
         }
-        public Task TaskErrorAsync(Guid taskId, TimeSpan executingTime, DateTime doneDate)
+        public Task TaskErrorAsync(Guid taskId, TimeSpan executingTime, DateTime doneDate, CancellationToken cancellationToken = default)
         {
-            if (!tasks.TryRemove(taskId, out TaskEntity task))
+            if (!tasks.TryGetValue(taskId, out MemoryTaskEntity task))
                 throw new InvalidOperationException();
 
-            task.Execution.Error(executingTime, doneDate);
+            task.ErrorTask(executingTime, doneDate);
 
             return Task.CompletedTask;
         }
-        public Task TaskCancelledAsync(Guid taskId, string reason)
+        public Task TaskCancelledAsync(Guid taskId, DateTime doneDate, string reason, CancellationToken cancellationToken = default)
         {
-            if (!tasks.TryRemove(taskId, out TaskEntity task))
+            if (!tasks.TryGetValue(taskId, out MemoryTaskEntity task))
                 throw new InvalidOperationException();
+
+            task.CancelTask(doneDate);
 
             return Task.CompletedTask;
         }
+    }
 
-        private class TaskEntity
+    public class MemoryTaskEntity
+    {
+        public Guid TaskId { get; }
+        public object TaskModel { get; }
+        public DateTime CreatedDate { get; }
+        public string TypeName { get; }
+        public DateTime? EndDate { get; private set; }
+        public MemoryTaskExecutionEntity Execution { get; private set; }
+
+        public MemoryTaskEntity(Guid taskId, DateTime createdDate, string taskTypeName, object taskModel)
         {
-            public Guid TaskId { get; }
-            public object TaskModel { get; }
-            public DateTime CreatedDate { get; }
-            public TaskExecutionEntity Execution { get; private set; }
-
-            public TaskEntity(Guid taskId, DateTime createdDate, object taskModel)
-            {
-                TaskId = taskId;
-                CreatedDate = createdDate;
-                TaskModel = taskModel;
-            }
-
-            public void StartTask(Guid executorId, DateTime startDate)
-            {
-                if (Execution != null)
-                    throw new InvalidOperationException("Задача уже выполняется.");
-
-                Execution = new TaskExecutionEntity(executorId, startDate);
-            }
-
-            public void DeferTask()
-            {
-                if (Execution == null)
-                    throw new InvalidOperationException("Задача уже не выполняется.");
-
-                Execution = null;
-            }
+            TaskId = taskId;
+            CreatedDate = createdDate;
+            TypeName = taskTypeName;
+            TaskModel = taskModel;
         }
-        private class TaskExecutionEntity
+
+        public void StartTask(Guid executorId, DateTime startDate)
         {
-            public Guid ExecutorId { get; }
-            public DateTime StartDate { get; }
-            public TimeSpan? ExecutionTime { get; private set; }
-            public DateTime FinishDate { get; private set; }
+            if (Execution != null)
+                throw new InvalidOperationException("Задача уже выполняется.");
 
-            public TaskExecutionEntity(Guid executorId, DateTime startDate)
-            {
-                ExecutorId = executorId;
-                StartDate = startDate;
-            }
-
-            public void Done(TimeSpan executingTime, DateTime doneDate)
-            {
-                ExecutionTime = executingTime;
-                FinishDate = doneDate;
-            }
-            public void Error(TimeSpan executingTime, DateTime doneDate)
-            {
-                ExecutionTime = executingTime;
-                FinishDate = doneDate;
-            }
+            Execution = new MemoryTaskExecutionEntity(executorId, startDate);
         }
+        public void DeferTask()
+        {
+            if (Execution == null)
+                throw new InvalidOperationException("Задача уже не выполняется.");
+
+            Execution = null;
+        }
+        public void SuccessTask(TimeSpan executingTime, DateTime finishDate)
+        {
+            EndDate = finishDate;
+            Execution.ExecutionTime = executingTime;
+            Execution.Status = TaskExecutionStatus.Success;
+        }
+        public void ErrorTask(TimeSpan executingTime, DateTime finishDate)
+        {
+            EndDate = finishDate;
+            Execution.ExecutionTime = executingTime;
+            Execution.Status = TaskExecutionStatus.Error;
+        }
+        public void CancelTask(DateTime finishDate)
+        {
+            EndDate = finishDate;
+        }
+    }
+    public class MemoryTaskExecutionEntity
+    {
+        public Guid ExecutorId { get; }
+        public DateTime StartDate { get; }
+        public TimeSpan? ExecutionTime { get; set; }
+        public TaskExecutionStatus Status { get; set; }
+
+        public MemoryTaskExecutionEntity(Guid executorId, DateTime startDate)
+        {
+            Status = TaskExecutionStatus.Started;
+            ExecutorId = executorId;
+            StartDate = startDate;
+        }
+    }
+    public enum TaskExecutionStatus
+    {
+        Started,
+        Success,
+        Error
     }
 }

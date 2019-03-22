@@ -41,6 +41,8 @@ namespace BrandUp.Worker.Executor
 
         private async Task ExecuteAsync()
         {
+            Console.WriteLine($"Task {TaskId} started.");
+
             try
             {
                 try
@@ -49,6 +51,9 @@ namespace BrandUp.Worker.Executor
 
                     executionWatch.Stop();
 
+
+                    Console.WriteLine($"Task {TaskId} success.");
+
                     await executorContext.OnSuccessJob(this);
                 }
                 catch (OperationCanceledException)
@@ -56,19 +61,33 @@ namespace BrandUp.Worker.Executor
                     executionWatch.Stop();
 
                     if (executionWatch.ElapsedMilliseconds >= timeoutInMilliseconds)
+                    {
+
+                        Console.WriteLine($"Task {TaskId} execution timeout.");
+
                         await executorContext.OnTimeoutJob(this);
+                    }
                     else
-                        await executorContext.OnCancelledJob(this);
+                    {
+
+                        Console.WriteLine($"Task {TaskId} cancelled.");
+
+                        await executorContext.OnDefferJob(this);
+                    }
                 }
                 catch (Exception exception)
                 {
                     executionWatch.Stop();
+
+                    Console.WriteLine($"Task {TaskId} error.");
 
                     await executorContext.OnErrorJob(this, exception);
                 }
             }
             catch (Exception unhandledException)
             {
+                Console.WriteLine($"Task {TaskId} unhandled error.");
+
                 await executorContext.OnUnhandledError(this, unhandledException);
             }
             finally
@@ -88,7 +107,7 @@ namespace BrandUp.Worker.Executor
     {
         Guid ExecutorId { get; }
         Task OnSuccessJob(JobTask job);
-        Task OnCancelledJob(JobTask job);
+        Task OnDefferJob(JobTask job);
         Task OnTimeoutJob(JobTask job);
         Task OnErrorJob(JobTask job, Exception exception);
         Task OnUnhandledError(JobTask job, Exception exception);

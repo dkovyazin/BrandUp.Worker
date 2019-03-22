@@ -25,7 +25,7 @@ namespace BrandUp.Worker.Allocator
             var client = factory.CreateClient();
             var contractSerializer = factory.Server.Host.Services.GetRequiredService<Remoting.IContractSerializer>();
 
-            var tasksClient = new RemoteTaskAllocator(client, contractSerializer);
+            var tasksClient = new WorkerServiceClient(client, contractSerializer);
 
             // Act
             var task = new TestTask();
@@ -41,7 +41,7 @@ namespace BrandUp.Worker.Allocator
             var contractSerializer = factory.Server.Host.Services.GetRequiredService<Remoting.IContractSerializer>();
             var taskMetadataManager = factory.Server.Host.Services.GetRequiredService<Tasks.ITaskMetadataManager>();
 
-            var tasksClient = new RemoteTaskAllocator(client, contractSerializer);
+            var tasksClient = new WorkerServiceClient(client, contractSerializer);
 
             // Act
             var executorId = await tasksClient.SubscribeAsync(taskMetadataManager.Tasks.Select(it => it.TaskName).ToArray());
@@ -56,7 +56,7 @@ namespace BrandUp.Worker.Allocator
             var contractSerializer = factory.Server.Host.Services.GetRequiredService<Remoting.IContractSerializer>();
             var taskMetadataManager = factory.Server.Host.Services.GetRequiredService<Tasks.ITaskMetadataManager>();
 
-            var tasksClient = new RemoteTaskAllocator(client, contractSerializer);
+            var tasksClient = new WorkerServiceClient(client, contractSerializer);
 
             // Act
             var executorId = await tasksClient.SubscribeAsync(taskMetadataManager.Tasks.Select(it => it.TaskName).ToArray());
@@ -72,7 +72,7 @@ namespace BrandUp.Worker.Allocator
             var contractSerializer = factory.Server.Host.Services.GetRequiredService<Remoting.IContractSerializer>();
             var taskMetadataManager = factory.Server.Host.Services.GetRequiredService<Tasks.ITaskMetadataManager>();
 
-            var tasksClient = new RemoteTaskAllocator(client, contractSerializer);
+            var tasksClient = new WorkerServiceClient(client, contractSerializer);
 
             // Act
             var taskId = await tasksClient.PushTaskAsync(new TestTask());

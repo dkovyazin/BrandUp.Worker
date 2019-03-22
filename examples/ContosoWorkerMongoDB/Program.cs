@@ -8,7 +8,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace ContosoWorker.SelfHosted
+namespace ContosoWorker
 {
     internal class Program
     {
@@ -31,10 +31,19 @@ namespace ContosoWorker.SelfHosted
                 })
                 .ConfigureServices((hostContext, services) =>
                 {
+
                     services
                         .AddWorkerAllocator(options =>
                         {
                             options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
+                        })
+                        .AddMongoDbRepository(options =>
+                        {
+                            var mongoConfig = hostContext.Configuration.GetSection("Worker.MongoDB");
+
+                            options.ConnectionString = mongoConfig.GetValue<string>("ConnectionString");
+                            options.DatabaseName = mongoConfig.GetValue<string>("DatabaseName");
+                            options.CollectionName = mongoConfig.GetValue<string>("CollectionName");
                         })
                         .AddTaskType<Tasks.TestTask>()
                         .AddLocalExecutor()
@@ -61,7 +70,7 @@ namespace ContosoWorker.SelfHosted
                         {
                             var tasks = scope.ServiceProvider.GetRequiredService<ITaskService>();
 
-                            var taskId = await tasks.PushTaskAsync(new Tasks.TestTask());
+                            var taskId = await tasks.PushTaskAsync(new Tasks.TestTask { Title = "test" });
                             Console.WriteLine($"Add task {taskId}");
                         }
                     }

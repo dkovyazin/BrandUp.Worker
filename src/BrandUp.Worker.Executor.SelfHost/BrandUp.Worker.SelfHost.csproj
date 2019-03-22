@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>BrandUp.Worker</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BrandUp.Worker.Allocator\BrandUp.Worker.Allocator.csproj" />
+    <ProjectReference Include="..\BrandUp.Worker.Executor\BrandUp.Worker.Executor.csproj" />
+  </ItemGroup>
+
+</Project>

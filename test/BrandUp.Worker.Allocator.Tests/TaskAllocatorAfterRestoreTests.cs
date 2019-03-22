@@ -1,6 +1,7 @@
-﻿using BrandUp.Worker.Tasks;
+﻿using BrandUp.Worker.Builder;
+using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Threading.Tasks;
 using Xunit;
@@ -9,54 +10,56 @@ namespace BrandUp.Worker.Allocator
 {
     public class TaskAllocatorAfterRestoreTests : IAsyncLifetime
     {
-        private readonly ServiceProvider serviceProvider;
-        private readonly IServiceScope serviceScope;
+        private readonly IHost host;
         private readonly ITaskMetadataManager manager;
         private readonly TaskAllocator allocator;
         private readonly MemoryTaskRepository taskRepository;
 
         public TaskAllocatorAfterRestoreTests()
         {
-            var services = new ServiceCollection();
-            services
-                .AddWorkerAllocator(options =>
+            host = new HostBuilder()
+                .ConfigureServices((hostContext, services) =>
                 {
-                    options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
+                    services
+                        .AddWorkerAllocator(options =>
+                        {
+                            options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
+                        })
+                        .AddTaskRepository<MemoryTaskRepository>()
+                        .AddTaskType(typeof(TestTask));
+
+                    services.AddSingleton<TaskAllocator>();
                 })
-                .AddTaskType(typeof(TestTask));
+                .Build();
 
-            serviceProvider = services.BuildServiceProvider();
-            serviceScope = serviceProvider.CreateScope();
-
-            manager = serviceScope.ServiceProvider.GetService<ITaskMetadataManager>();
-            taskRepository = new MemoryTaskRepository();
-            allocator = new TaskAllocator(manager, taskRepository, serviceScope.ServiceProvider.GetService<IOptions<TaskAllocatorOptions>>());
+            manager = host.Services.GetService<ITaskMetadataManager>();
+            allocator = (TaskAllocator)host.Services.GetRequiredService<ITaskAllocator>();
+            taskRepository = (MemoryTaskRepository)host.Services.GetRequiredService<ITaskRepository>();
         }
+
+        #region IAsyncLifetime members
 
         async Task IAsyncLifetime.InitializeAsync()
         {
             var taskId = Guid.NewGuid();
-            await taskRepository.PushTaskAsync(taskId, new TestTask(), DateTime.UtcNow);
+            await taskRepository.PushTaskAsync(taskId, "TestTask", new TestTask(), DateTime.UtcNow);
 
             taskId = Guid.NewGuid();
-            await taskRepository.PushTaskAsync(taskId, new TestTask(), DateTime.UtcNow);
+            await taskRepository.PushTaskAsync(taskId, "TestTask", new TestTask(), DateTime.UtcNow);
             await taskRepository.TaskStartedAsync(taskId, Guid.NewGuid(), DateTime.UtcNow);
-        }
 
+            await host.StartAsync();
+        }
         Task IAsyncLifetime.DisposeAsync()
         {
-            allocator.Dispose();
-            serviceScope.Dispose();
-            serviceProvider.Dispose();
-
-            return Task.CompletedTask;
+            return host.StopAsync();
         }
 
-        [Fact]
-        public async Task ResporeTasks()
-        {
-            await allocator.ResporeTasksAsync();
+        #endregion
 
+        [Fact]
+        public void ResporeTasks()
+        {
             Assert.Equal(1, allocator.CountCommandInQueue);
             Assert.Equal(1, allocator.CountCommandExecuting);
         }

@@ -35,7 +35,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BrandUp.Worker.Allocator.Ho
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BrandUp.Worker.Executor.Host", "src\BrandUp.Worker.Executor.Host\BrandUp.Worker.Executor.Host.csproj", "{CF161880-0506-423C-9B05-8AE7BD4ACF50}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ContosoWorkerSelfHosted", "examples\ContosoWorkerSelfHosted\ContosoWorkerSelfHosted.csproj", "{8DB86616-4E2B-4750-9100-10C3B1CE0246}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ContosoWorkerSelfHosted", "examples\ContosoWorkerSelfHosted\ContosoWorkerSelfHosted.csproj", "{8DB86616-4E2B-4750-9100-10C3B1CE0246}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BrandUp.Worker.MongoDB", "src\BrandUp.Worker.MongoDB\BrandUp.Worker.MongoDB.csproj", "{31E21AFD-929A-4ACE-BE5A-592D8F8232C2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ContosoWorkerMongoDB", "examples\ContosoWorkerMongoDB\ContosoWorkerMongoDB.csproj", "{D458551D-B103-4D53-845F-B8E35D59BE93}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BrandUp.Worker.SelfHost", "src\BrandUp.Worker.Executor.SelfHost\BrandUp.Worker.SelfHost.csproj", "{098E6233-1D3D-4F3F-BC9E-873082163E49}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -99,6 +105,18 @@ Global
 		{8DB86616-4E2B-4750-9100-10C3B1CE0246}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8DB86616-4E2B-4750-9100-10C3B1CE0246}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8DB86616-4E2B-4750-9100-10C3B1CE0246}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31E21AFD-929A-4ACE-BE5A-592D8F8232C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31E21AFD-929A-4ACE-BE5A-592D8F8232C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31E21AFD-929A-4ACE-BE5A-592D8F8232C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31E21AFD-929A-4ACE-BE5A-592D8F8232C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D458551D-B103-4D53-845F-B8E35D59BE93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D458551D-B103-4D53-845F-B8E35D59BE93}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D458551D-B103-4D53-845F-B8E35D59BE93}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D458551D-B103-4D53-845F-B8E35D59BE93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{098E6233-1D3D-4F3F-BC9E-873082163E49}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{098E6233-1D3D-4F3F-BC9E-873082163E49}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{098E6233-1D3D-4F3F-BC9E-873082163E49}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{098E6233-1D3D-4F3F-BC9E-873082163E49}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -118,6 +136,9 @@ Global
 		{E03414E9-4F63-4629-901F-7FA056E936F2} = {A9DC4FAF-53BA-4D3B-82B8-12A91FA6FFDC}
 		{CF161880-0506-423C-9B05-8AE7BD4ACF50} = {A9DC4FAF-53BA-4D3B-82B8-12A91FA6FFDC}
 		{8DB86616-4E2B-4750-9100-10C3B1CE0246} = {0A120B09-51CE-4EDB-A73B-2C771735FA98}
+		{31E21AFD-929A-4ACE-BE5A-592D8F8232C2} = {A9DC4FAF-53BA-4D3B-82B8-12A91FA6FFDC}
+		{D458551D-B103-4D53-845F-B8E35D59BE93} = {0A120B09-51CE-4EDB-A73B-2C771735FA98}
+		{098E6233-1D3D-4F3F-BC9E-873082163E49} = {A9DC4FAF-53BA-4D3B-82B8-12A91FA6FFDC}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {3866033C-AB91-468C-AF42-48CBCCF9CB65}

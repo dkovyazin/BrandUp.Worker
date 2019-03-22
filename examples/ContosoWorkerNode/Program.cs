@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -22,9 +23,14 @@ namespace ContosoWorker.Node
                     //configApp.AddEnvironmentVariables(prefix: "PREFIX_");
                     configApp.AddCommandLine(args);
                 })
+                .ConfigureLogging((hostContext, configLogging) =>
+                {
+                    configLogging.AddConsole();
+                    configLogging.AddDebug();
+                })
                 .ConfigureServices((hostContext, services) =>
                 {
-                    var executorBuilder = services.AddWorkerExecutorHost(new Uri("https://localhost:44338/"));
+                    var executorBuilder = services.AddWorkerExecutor(new Uri("https://localhost:44338/"));
 
                     executorBuilder
                         .AddTaskType<Tasks.TestTask>();

@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BrandUp.Worker.Allocator\BrandUp.Worker.Allocator.csproj" />
     <ProjectReference Include="..\..\src\BrandUp.Worker.Common\BrandUp.Worker.Common.csproj" />
+    <ProjectReference Include="..\..\src\BrandUp.Worker.Executor.SelfHost\BrandUp.Worker.SelfHost.csproj" />
     <ProjectReference Include="..\..\src\BrandUp.Worker.Executor\BrandUp.Worker.Executor.csproj" />
   </ItemGroup>
 

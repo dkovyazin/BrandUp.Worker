@@ -6,7 +6,7 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     public static class ServiceCollectionExtensions
     {
-        public static IWorkerExecutorBuilder AddWorkerExecutorHost(this IServiceCollection services, Uri workerServiceUrl)
+        public static IWorkerExecutorBuilder AddWorkerExecutor(this IServiceCollection services, Uri workerServiceUrl)
         {
             if (workerServiceUrl == null)
                 throw new ArgumentNullException(nameof(workerServiceUrl));
@@ -15,10 +15,12 @@ namespace Microsoft.Extensions.DependencyInjection
 
             services.AddTasksServiceClient(workerServiceUrl);
 
-            services.AddHttpClient<ITaskAllocator, RemoteTaskAllocator>((options) =>
+            services.AddHttpClient<WorkerServiceClient>((options) =>
             {
                 options.BaseAddress = workerServiceUrl;
             });
+
+            services.AddScoped<ITaskAllocator, RemoteTaskAllocator>();
 
             return builder.AddExecutor();
         }

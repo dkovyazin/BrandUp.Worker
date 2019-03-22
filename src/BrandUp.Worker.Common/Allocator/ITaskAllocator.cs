@@ -7,6 +7,7 @@ namespace BrandUp.Worker.Allocator
 {
     public interface ITaskAllocator
     {
+        Task StartAsync(CancellationToken stoppingToken);
         Task<Guid> PushTaskAsync(object taskModel, CancellationToken cancellationToken = default);
         Task<Guid> SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken = default);
         Task<IEnumerable<TaskToExecute>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken = default);

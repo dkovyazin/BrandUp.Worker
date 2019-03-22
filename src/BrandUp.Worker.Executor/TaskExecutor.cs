@@ -1,9 +1,7 @@
 ﻿using BrandUp.Worker.Allocator;
-using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,16 +12,14 @@ namespace BrandUp.Worker.Executor
     {
         #region Fields
 
-        private static readonly Type HandlerBaseType = typeof(TaskHandler<>);
-        private readonly ITaskMetadataManager metadataManager;
+        public static readonly Type HandlerBaseType = typeof(TaskHandler<>);
         private readonly ITaskAllocator taskAllocator;
-        private readonly ITaskHandlerManager handlerManager;
         private readonly IServiceProvider serviceProvider;
+        private IExecutorConnection executorConnection;
         private bool isStarted = false;
         private int executedCommands = 0;
         private int faultedCommands = 0;
         private int cancelledCommands = 0;
-        private readonly Dictionary<Type, TaskHandlerFactory> handlerFactories = new Dictionary<Type, TaskHandlerFactory>();
         private readonly ConcurrentDictionary<Guid, JobTask> _startedJobs = new ConcurrentDictionary<Guid, JobTask>();
 
         #endregion
@@ -38,37 +34,26 @@ namespace BrandUp.Worker.Executor
 
         #endregion
 
-        public TaskExecutor(ITaskMetadataManager metadataManager, ITaskHandlerManager handlerManager, ITaskAllocator taskAllocator, IServiceProvider serviceProvider)
+        public TaskExecutor(ITaskAllocator taskAllocator, IServiceProvider serviceProvider)
         {
-            this.metadataManager = metadataManager ?? throw new ArgumentNullException(nameof(metadataManager));
-            this.handlerManager = handlerManager ?? throw new ArgumentNullException(nameof(handlerManager));
             this.taskAllocator = taskAllocator ?? throw new ArgumentNullException(nameof(taskAllocator));
             this.serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         }
 
-        public async Task WorkAsync(CancellationToken cancellationToken)
+        public async Task WorkAsync(IExecutorConnection executorConnection, CancellationToken cancellationToken)
         {
             if (isStarted)
                 throw new InvalidOperationException();
             isStarted = true;
 
-            foreach (var taskType in handlerManager.TaskTypes)
-            {
-                var taskMetadata = metadataManager.FindTaskMetadata(taskType);
-                if (taskMetadata == null)
-                    throw new InvalidOperationException();
+            this.executorConnection = executorConnection ?? throw new ArgumentNullException(nameof(executorConnection));
 
-                handlerFactories.Add(taskType, new TaskHandlerFactory(taskMetadata.TaskName, HandlerBaseType.MakeGenericType(taskType)));
-            }
-
-            ExecutorId = await taskAllocator.SubscribeAsync(handlerFactories.Values.Select(it => it.TaskName).ToArray(), cancellationToken);
-
-            await WaitingCommandsCycleAsync(cancellationToken);
+            await WaitingTasksCycleAsync(cancellationToken);
 
             isStarted = false;
         }
 
-        private async Task WaitingCommandsCycleAsync(CancellationToken cancellationToken)
+        private async Task WaitingTasksCycleAsync(CancellationToken cancellationToken)
         {
             var countWaits = 0;
             while (!cancellationToken.IsCancellationRequested)
@@ -88,13 +73,13 @@ namespace BrandUp.Worker.Executor
 
         private void StartJob(TaskToExecute taskToExecute, CancellationToken cancellationToken)
         {
-            if (!handlerFactories.TryGetValue(taskToExecute.Task.GetType(), out TaskHandlerFactory handlerFactory))
+            if (!executorConnection.TryGetHandlerMetadata(taskToExecute.Task.GetType(), out TaskHandlerMetadata handlerMetadata))
                 throw new InvalidOperationException();
 
             var jobScope = serviceProvider.CreateScope();
             try
             {
-                var taskHandler = (ITaskHandler)jobScope.ServiceProvider.GetRequiredService(handlerFactory.HandlerType);
+                var taskHandler = (ITaskHandler)jobScope.ServiceProvider.GetRequiredService(handlerMetadata.HandlerType);
 
                 var job = new JobTask(taskToExecute.TaskId, taskToExecute.Task, taskHandler, this);
                 if (!_startedJobs.TryAdd(job.TaskId, job))
@@ -104,9 +89,11 @@ namespace BrandUp.Worker.Executor
             }
             catch (Exception ex)
             {
-                jobScope.Dispose();
-
                 throw ex;
+            }
+            finally
+            {
+                jobScope.Dispose();
             }
         }
 
@@ -116,7 +103,7 @@ namespace BrandUp.Worker.Executor
 
         #region IJobExecutorContext members
 
-        public Guid ExecutorId { get; private set; }
+        public Guid ExecutorId => executorConnection.ExecutorId;
         async Task IJobExecutorContext.OnSuccessJob(JobTask job)
         {
             if (!_startedJobs.TryRemove(job.TaskId, out JobTask removed))
@@ -126,7 +113,7 @@ namespace BrandUp.Worker.Executor
 
             Interlocked.Increment(ref executedCommands);
         }
-        async Task IJobExecutorContext.OnCancelledJob(JobTask job)
+        async Task IJobExecutorContext.OnDefferJob(JobTask job)
         {
             if (!_startedJobs.TryRemove(job.TaskId, out JobTask removed))
                 throw new InvalidOperationException();
@@ -167,17 +154,23 @@ namespace BrandUp.Worker.Executor
         }
 
         #endregion
+    }
 
-        private class TaskHandlerFactory
+    public interface IExecutorConnection
+    {
+        Guid ExecutorId { get; }
+        bool TryGetHandlerMetadata(Type taskType, out TaskHandlerMetadata handlerFactory);
+    }
+
+    public class TaskHandlerMetadata
+    {
+        public string TaskName { get; }
+        public Type HandlerType { get; }
+
+        public TaskHandlerMetadata(string taskName, Type handlerType)
         {
-            public string TaskName { get; }
-            public Type HandlerType { get; }
-
-            public TaskHandlerFactory(string taskName, Type handlerType)
-            {
-                TaskName = taskName;
-                HandlerType = handlerType;
-            }
+            TaskName = taskName;
+            HandlerType = handlerType;
         }
     }
 }

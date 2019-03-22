@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.2</TargetFramework>
-    <LangVersion>7.1</LangVersion>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BrandUp.Worker.Executor.SelfHost\BrandUp.Worker.SelfHost.csproj" />
+    <ProjectReference Include="..\..\src\BrandUp.Worker.MongoDB\BrandUp.Worker.MongoDB.csproj" />
     <ProjectReference Include="..\ContosoWorkerTasks\ContosoWorkerTasks.csproj" />
   </ItemGroup>
 
