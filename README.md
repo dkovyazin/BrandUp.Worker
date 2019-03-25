@@ -16,8 +16,16 @@ public class TestTask
 }
 ```
 
-## Worker service startup
+## Task client startup
+Using NuGet package [BrandUp.Worker.Client](https://www.nuget.org/packages/BrandUp.Worker.Client/)
 
+```
+services
+    .AddWorkerClient(new System.Uri("https://localhost:44351/"))
+    .AddTaskType<Tasks.TestTask>();
+```
+
+## Task service startup
 Using NuGet package [BrandUp.Worker.Allocator.Host](https://www.nuget.org/packages/BrandUp.Worker.Allocator.Host/)
 
 ```
@@ -48,7 +56,7 @@ public class Startup
 Using NuGet package [BrandUp.Worker.Executor.Host](https://www.nuget.org/packages/BrandUp.Worker.Executor.Host/)
 
 ```
-var executorBuilder = services.AddWorkerExecutorHost(new Uri("https://localhost:44338/"));
+var executorBuilder = services.AddWorkerExecutor(new Uri("https://localhost:44338/"));
 
 executorBuilder
     .AddTaskType<Tasks.TestTask>();
@@ -59,7 +67,7 @@ executorBuilder
 
 ## Worker self hosted startup
 
-Using NuGet packages [BrandUp.Worker.Allocator](https://www.nuget.org/packages/BrandUp.Worker.Allocator/) and [BrandUp.Worker.Executor](https://www.nuget.org/packages/BrandUp.Worker.Executor/)
+Using NuGet packages [BrandUp.Worker.SelfHost](https://www.nuget.org/packages/BrandUp.Worker.SelfHost/)
 
 ```
 services
@@ -68,6 +76,6 @@ services
         options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
     })
     .AddTaskType<Tasks.TestTask>()
-    .AddExecutor()
+    .AddLocalExecutor()
     .MapTaskHandler<Tasks.TestTask, Handlers.TestTaskHandler>();
 ```
