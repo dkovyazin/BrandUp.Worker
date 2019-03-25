@@ -20,7 +20,9 @@ public class TestTask
 Using NuGet package [BrandUp.Worker.Client](https://www.nuget.org/packages/BrandUp.Worker.Client/)
 
 ```
-services.AddTasksServiceClient(new System.Uri("https://localhost:44351/"));
+services
+    .AddWorkerClient(new System.Uri("https://localhost:44351/"))
+    .AddTaskType<Tasks.TestTask>();
 ```
 
 ## Task service startup
