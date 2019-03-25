@@ -11,9 +11,7 @@ namespace Microsoft.Extensions.DependencyInjection
             if (workerServiceUrl == null)
                 throw new ArgumentNullException(nameof(workerServiceUrl));
 
-            var builder = services.AddWorkerCore();
-
-            services.AddTasksServiceClient(workerServiceUrl);
+            var builder = services.AddWorkerClient(workerServiceUrl);
 
             services.AddHttpClient<WorkerServiceClient>((options) =>
             {
