@@ -16,8 +16,10 @@ public class TestTask
 }
 ```
 
-## Worker service startup
+## Task client startup
+Using NuGet package [BrandUp.Worker.Client](https://www.nuget.org/packages/BrandUp.Worker.Client/)
 
+## Task service startup
 Using NuGet package [BrandUp.Worker.Allocator.Host](https://www.nuget.org/packages/BrandUp.Worker.Allocator.Host/)
 
 ```
