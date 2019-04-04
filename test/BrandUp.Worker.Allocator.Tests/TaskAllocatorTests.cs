@@ -25,6 +25,7 @@ namespace BrandUp.Worker.Allocator
                         .AddWorkerAllocator(options =>
                         {
                             options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
+                            options.MaxTasksPerExecutor = 2;
                         })
                         .AddTaskType<TestTask>();
 
@@ -218,6 +219,36 @@ namespace BrandUp.Worker.Allocator
             }
 
             Assert.Equal(3, i);
+        }
+
+        [Fact]
+        public async Task WaitTasks_MaxTasksPerExecutor1()
+        {
+            var executorId = await allocator.SubscribeAsync(metadataManager.Tasks.Select(it => it.TaskName).ToArray());
+            await allocator.PushTaskAsync(new TestTask());
+            await allocator.PushTaskAsync(new TestTask());
+            await allocator.PushTaskAsync(new TestTask());
+
+            var tasks = await allocator.WaitTasksAsync(executorId, CancellationToken.None);
+
+            Assert.Equal(2, tasks.Count());
+            Assert.Equal(1, allocator.CountCommandInQueue);
+            Assert.Equal(2, allocator.CountCommandExecuting);
+        }
+
+        [Fact]
+        public async Task WaitTasks_MaxTasksPerExecutor2()
+        {
+            var executorId = await allocator.SubscribeAsync(metadataManager.Tasks.Select(it => it.TaskName).ToArray());
+            await allocator.PushTaskAsync(new TestTask());
+            await allocator.PushTaskAsync(new TestTask());
+
+            var tasks = await allocator.WaitTasksAsync(executorId, CancellationToken.None);
+
+            await allocator.PushTaskAsync(new TestTask());
+
+            Assert.Equal(1, allocator.CountCommandInQueue);
+            Assert.Equal(2, allocator.CountCommandExecuting);
         }
 
         [Fact]

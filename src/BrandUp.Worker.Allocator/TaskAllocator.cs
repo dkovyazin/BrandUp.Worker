@@ -120,6 +120,9 @@ namespace BrandUp.Worker.Allocator
 
             foreach (var workerWaiting in executorWaitings.Values)
             {
+                if (workerWaiting.Executor.CountExecutingCommands >= maxTasksPerExecutor)
+                    continue;
+
                 if (!workerWaiting.Executor.IsSupportCommandType(taskType))
                     continue;
 
@@ -142,7 +145,6 @@ namespace BrandUp.Worker.Allocator
             executor = null;
             return false;
         }
-
         private async Task<List<TaskContainer>> FindTasksToExecuteAsync(TaskExecutor executor)
         {
             var commandsToExecute = new List<TaskContainer>();
@@ -157,11 +159,11 @@ namespace BrandUp.Worker.Allocator
 
                     commandsToExecute.Add(task);
 
-                    if (commandsToExecute.Count >= maxTasksPerExecutor)
+                    if (commandsToExecute.Count >= (maxTasksPerExecutor - executor.CountExecutingCommands))
                         break;
                 }
 
-                if (commandsToExecute.Count >= maxTasksPerExecutor)
+                if (commandsToExecute.Count >= (maxTasksPerExecutor - executor.CountExecutingCommands))
                     break;
             }
 
@@ -170,7 +172,7 @@ namespace BrandUp.Worker.Allocator
         private async Task<bool> TryTaskWaitingTimeout(TaskContainer task, DateTime utcNow)
         {
             var taskMetadata = MetadataManager.FindTaskMetadata(task.TaskModel);
-            var timeoutWaiting = taskMetadata.TimeoutWaitingToStartInMiliseconds;
+            var timeoutWaiting = taskMetadata.StartTimeout;
             if (timeoutWaiting > 0 && utcNow >= task.CreatedDate.AddMilliseconds(timeoutWaiting))
             {
                 try

@@ -9,7 +9,7 @@ namespace BrandUp.Worker.Tasks
 
         public string TaskName { get; }
         public Type TaskType { get; }
-        public int TimeoutWaitingToStartInMiliseconds { get; }
+        public int StartTimeout { get; }
         public int ExecutionTimeout { get; }
 
         public TaskMetadata(Type objectType)
@@ -35,7 +35,7 @@ namespace BrandUp.Worker.Tasks
                     taskName = taskName.Substring(0, taskName.Length - TaskNamePrefix.Length);
             }
             TaskName = taskName;
-            TimeoutWaitingToStartInMiliseconds = taskAttribute.TimeoutWaitingToStartInMiliseconds;
+            StartTimeout = taskAttribute.StartTimeout;
             ExecutionTimeout = taskAttribute.ExecutionTimeout;
         }
 
