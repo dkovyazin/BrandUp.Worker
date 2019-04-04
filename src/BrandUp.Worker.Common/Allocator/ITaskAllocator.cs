@@ -7,6 +7,7 @@ namespace BrandUp.Worker.Allocator
 {
     public interface ITaskAllocator
     {
+        string Name { get; }
         Task StartAsync(CancellationToken stoppingToken);
         Task<Guid> PushTaskAsync(object taskModel, CancellationToken cancellationToken = default);
         Task<Guid> SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken = default);
@@ -19,7 +20,7 @@ namespace BrandUp.Worker.Allocator
     public class TaskToExecute
     {
         public Guid TaskId { get; set; }
-        public object Task { get; set; }
+        public object TaskModel { get; set; }
         public int Timeout { get; set; }
     }
 }

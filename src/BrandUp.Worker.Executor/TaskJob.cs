@@ -1,28 +1,31 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace BrandUp.Worker.Executor
 {
-    public class JobTask : IDisposable
+    internal class TaskJob : IDisposable
     {
-        public Guid TaskId { get; }
         private readonly object taskModel;
         private readonly ITaskHandler taskHandler;
         private readonly IJobExecutorContext executorContext;
+        private readonly ILogger<TaskJob> logger;
         private CancellationTokenSource cancellationSource;
         private Stopwatch executionWatch;
         private int timeoutInMilliseconds = 0;
 
+        public Guid TaskId { get; }
         public TimeSpan Elapsed => executionWatch.Elapsed;
 
-        internal JobTask(Guid commandId, object command, ITaskHandler handler, IJobExecutorContext executorContext)
+        internal TaskJob(Guid taskId, object taskModel, ITaskHandler taskHandler, IJobExecutorContext executorContext, ILogger<TaskJob> logger)
         {
-            TaskId = commandId;
-            taskModel = command;
-            taskHandler = handler;
+            TaskId = taskId;
+            this.taskModel = taskModel;
+            this.taskHandler = taskHandler;
             this.executorContext = executorContext;
+            this.logger = logger;
         }
 
         public void Start(CancellationToken cancellationToken, int timeoutInMilliseconds)
@@ -36,12 +39,14 @@ namespace BrandUp.Worker.Executor
             cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cancellationSource.CancelAfter(timeoutInMilliseconds);
 
+            logger.LogInformation($"Task {TaskId} starting.");
+
             Task.Run(ExecuteAsync, cancellationSource.Token);
         }
 
         private async Task ExecuteAsync()
         {
-            Console.WriteLine($"Task {TaskId} started.");
+            logger.LogInformation($"Task {TaskId} started.");
 
             try
             {
@@ -51,8 +56,7 @@ namespace BrandUp.Worker.Executor
 
                     executionWatch.Stop();
 
-
-                    Console.WriteLine($"Task {TaskId} success.");
+                    logger.LogInformation($"Task {TaskId} success.");
 
                     await executorContext.OnSuccessJob(this);
                 }
@@ -62,15 +66,13 @@ namespace BrandUp.Worker.Executor
 
                     if (executionWatch.ElapsedMilliseconds >= timeoutInMilliseconds)
                     {
-
-                        Console.WriteLine($"Task {TaskId} execution timeout.");
+                        logger.LogInformation($"Task {TaskId} execution timeout.");
 
                         await executorContext.OnTimeoutJob(this);
                     }
                     else
                     {
-
-                        Console.WriteLine($"Task {TaskId} cancelled.");
+                        logger.LogInformation($"Task {TaskId} cancelled.");
 
                         await executorContext.OnDefferJob(this);
                     }
@@ -79,20 +81,16 @@ namespace BrandUp.Worker.Executor
                 {
                     executionWatch.Stop();
 
-                    Console.WriteLine($"Task {TaskId} error.");
+                    logger.LogError(exception, $"Task {TaskId} error.");
 
                     await executorContext.OnErrorJob(this, exception);
                 }
             }
             catch (Exception unhandledException)
             {
-                Console.WriteLine($"Task {TaskId} unhandled error.");
+                logger.LogCritical(unhandledException, $"Task {TaskId} unhandled error.");
 
                 await executorContext.OnUnhandledError(this, unhandledException);
-            }
-            finally
-            {
-                Dispose();
             }
         }
 
@@ -103,13 +101,13 @@ namespace BrandUp.Worker.Executor
         }
     }
 
-    public interface IJobExecutorContext
+    internal interface IJobExecutorContext
     {
         Guid ExecutorId { get; }
-        Task OnSuccessJob(JobTask job);
-        Task OnDefferJob(JobTask job);
-        Task OnTimeoutJob(JobTask job);
-        Task OnErrorJob(JobTask job, Exception exception);
-        Task OnUnhandledError(JobTask job, Exception exception);
+        Task OnSuccessJob(TaskJob job);
+        Task OnDefferJob(TaskJob job);
+        Task OnTimeoutJob(TaskJob job);
+        Task OnErrorJob(TaskJob job, Exception exception);
+        Task OnUnhandledError(TaskJob job, Exception exception);
     }
 }

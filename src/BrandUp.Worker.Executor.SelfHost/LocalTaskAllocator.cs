@@ -16,7 +16,7 @@ namespace BrandUp.Worker.Allocator
         private readonly Dictionary<Type, TaskHandlerMetadata> handlerFactories = new Dictionary<Type, TaskHandlerMetadata>();
         private readonly IServiceProvider serviceProvider;
 
-        public LocalTaskAllocator(ITaskMetadataManager metadataManager, ITaskRepository taskRepository, IOptions<TaskAllocatorOptions> options, ITaskHandlerManager handlerManager, IServiceProvider serviceProvider, ILoggerFactory loggerFactory) : base(metadataManager, taskRepository, options, loggerFactory)
+        public LocalTaskAllocator(ITaskMetadataManager metadataManager, ITaskRepository taskRepository, IOptions<TaskAllocatorOptions> options, ITaskHandlerManager handlerManager, IServiceProvider serviceProvider, ILogger<TaskAllocator> logger) : base(metadataManager, taskRepository, options, logger)
         {
             this.serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 

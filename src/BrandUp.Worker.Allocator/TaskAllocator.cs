@@ -38,12 +38,16 @@ namespace BrandUp.Worker.Allocator
 
         #endregion
 
-        public TaskAllocator(ITaskMetadataManager metadataManager, ITaskRepository taskRepository, IOptions<TaskAllocatorOptions> options, ILoggerFactory loggerFactory)
+        public TaskAllocator(ITaskMetadataManager metadataManager, ITaskRepository taskRepository, IOptions<TaskAllocatorOptions> options, ILogger<TaskAllocator> logger)
         {
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
+            if (string.IsNullOrEmpty(options.Value.Name))
+                throw new ArgumentNullException(nameof(TaskAllocatorOptions.Name));
 
             var optionsValue = options.Value;
+
+            Name = options.Value.Name;
 
             if (optionsValue.TimeoutWaitingTasksPerExecutor > TimeSpan.Zero)
                 timeoutWaitingTasksPerExecutor = optionsValue.TimeoutWaitingTasksPerExecutor;
@@ -54,7 +58,7 @@ namespace BrandUp.Worker.Allocator
             this.taskRepository = taskRepository ?? throw new ArgumentNullException(nameof(taskRepository));
             commandQueue = new TaskQueue(metadataManager.Tasks.Select(it => it.TaskType).ToArray());
 
-            logger = loggerFactory.CreateLogger(typeof(TaskAllocator));
+            this.logger = logger;
         }
 
         #region Methods
@@ -138,32 +142,6 @@ namespace BrandUp.Worker.Allocator
             executor = null;
             return false;
         }
-        public ConnectExecutorResult ConnectExecutor(ExecutorOptions options)
-        {
-            if (options == null)
-                throw new ArgumentNullException(nameof(options));
-
-            var commandTypes = new List<Type>();
-            foreach (var commandTypeName in options.CommandTypeNames)
-            {
-                var commandMetadata = MetadataManager.FindTaskMetadata(commandTypeName);
-                if (commandMetadata == null)
-                    return ConnectExecutorResult.ErrorResult($"Тип команды {commandTypeName} не зарегистрирован.");
-
-                commandTypes.Add(commandMetadata.TaskType);
-            }
-
-            if (commandTypes.Count == 0)
-                return ConnectExecutorResult.ErrorResult("Не указано ни одного типа команды для исполнителя.");
-
-            var executorId = Guid.NewGuid();
-            var executor = new TaskExecutor(executorId, commandTypes);
-
-            if (!executors.TryAdd(executorId, executor))
-                return ConnectExecutorResult.ErrorResult("Не удалось зафиксировать подключение исполнителя.");
-
-            return ConnectExecutorResult.SuccessResult(executorId);
-        }
 
         private async Task<List<TaskContainer>> FindTasksToExecuteAsync(TaskExecutor executor)
         {
@@ -236,9 +214,12 @@ namespace BrandUp.Worker.Allocator
 
         #region ITaskAllocator members
 
+        public string Name { get; private set; }
         public async Task StartAsync(CancellationToken stoppingToken)
         {
             cancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+            logger.LogInformation($"Tasks allocator {Name} starting.");
 
             try
             {
@@ -246,26 +227,49 @@ namespace BrandUp.Worker.Allocator
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Не удалось восстановить задачи из репозитория.");
+                logger.LogCritical(ex, "Не удалось восстановить задачи из репозитория.");
 
                 throw ex;
             }
 
+
+            logger.LogInformation($"Tasks allocator {Name} started.");
+
             await OnStartAsync(stoppingToken);
+
+            logger.LogInformation($"Tasks allocator {Name} ended.");
         }
-        public Task<Guid> PushTaskAsync(object taskModel, CancellationToken cancellationToken)
+        public Task<Guid> PushTaskAsync(object taskModel, CancellationToken cancellationToken = default)
         {
             var taskId = PushTask(taskModel, out bool isStarted, out Guid executorId);
             return Task.FromResult(taskId);
         }
-        public Task<Guid> SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken)
+        public Task<Guid> SubscribeAsync(string[] taskTypeNames, CancellationToken cancellationToken = default)
         {
-            var result = ConnectExecutor(new ExecutorOptions(taskTypeNames));
-            if (!result.Success)
-                throw new InvalidOperationException(result.Error);
-            return Task.FromResult(result.ExecutorId);
+            var commandTypes = new List<Type>();
+            foreach (var commandTypeName in taskTypeNames)
+            {
+                var commandMetadata = MetadataManager.FindTaskMetadata(commandTypeName);
+                if (commandMetadata == null)
+                    throw new InvalidOperationException($"Тип команды {commandTypeName} не зарегистрирован.");
+
+                commandTypes.Add(commandMetadata.TaskType);
+            }
+
+            if (commandTypes.Count == 0)
+                throw new InvalidOperationException("Не указано ни одного типа команды для исполнителя.");
+
+            var executorId = Guid.NewGuid();
+            var executor = new TaskExecutor(executorId, commandTypes);
+
+            if (!executors.TryAdd(executorId, executor))
+                throw new InvalidOperationException("Не удалось зафиксировать подключение исполнителя.");
+
+            logger.LogInformation($"Connected executor {executorId}.");
+
+            return Task.FromResult(executorId);
         }
-        public async Task<IEnumerable<TaskToExecute>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken)
+        public async Task<IEnumerable<TaskToExecute>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken = default)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();
@@ -290,11 +294,11 @@ namespace BrandUp.Worker.Allocator
                 executor.AddTask(task);
                 Interlocked.Increment(ref countExecutingTasks);
 
-                tasksToExecute.Add(new TaskToExecute { TaskId = task.TaskId, Task = task.TaskModel, Timeout = taskMetadata.ExecutionTimeout });
+                tasksToExecute.Add(new TaskToExecute { TaskId = task.TaskId, TaskModel = task.TaskModel, Timeout = taskMetadata.ExecutionTimeout });
             }
             return tasksToExecute;
         }
-        public async Task SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken)
+        public async Task SuccessTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, CancellationToken cancellationToken = default)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();
@@ -306,7 +310,7 @@ namespace BrandUp.Worker.Allocator
 
             await taskRepository.TaskSuccessAsync(taskId, executingTime, DateTime.UtcNow);
         }
-        public async Task ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken)
+        public async Task ErrorTaskAsync(Guid executorId, Guid taskId, TimeSpan executingTime, Exception exception, CancellationToken cancellationToken = default)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();
@@ -318,7 +322,7 @@ namespace BrandUp.Worker.Allocator
 
             await taskRepository.TaskErrorAsync(taskId, executingTime, DateTime.UtcNow);
         }
-        public async Task DeferTaskAsync(Guid executorId, Guid taskId, CancellationToken cancellationToken)
+        public async Task DeferTaskAsync(Guid executorId, Guid taskId, CancellationToken cancellationToken = default)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();

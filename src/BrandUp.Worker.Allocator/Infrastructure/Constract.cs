@@ -41,33 +41,6 @@ namespace BrandUp.Worker.Allocator
             CommandTypeNames = commandTypeNames ?? throw new ArgumentNullException(nameof(commandTypeNames));
         }
     }
-    public class ConnectExecutorResult
-    {
-        public bool Success { get; private set; }
-        public Guid ExecutorId { get; private set; }
-        public string Error { get; private set; }
-
-        protected ConnectExecutorResult() { }
-        private ConnectExecutorResult(Guid executorId)
-        {
-            Success = true;
-            ExecutorId = executorId;
-        }
-        private ConnectExecutorResult(string error)
-        {
-            Success = false;
-            Error = error;
-        }
-
-        public static ConnectExecutorResult SuccessResult(Guid executorId)
-        {
-            return new ConnectExecutorResult(executorId);
-        }
-        public static ConnectExecutorResult ErrorResult(string error)
-        {
-            return new ConnectExecutorResult(error);
-        }
-    }
     public class WaitTasksResult
     {
         public bool Success { get; private set; }

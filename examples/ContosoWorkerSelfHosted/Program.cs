@@ -67,6 +67,8 @@ namespace ContosoWorker.SelfHosted
                     }
                 }
             }
+
+            Console.ReadLine();
         }
     }
 }

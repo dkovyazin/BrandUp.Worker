@@ -45,6 +45,8 @@ namespace BrandUp.Worker.Allocator
 
         #region ITaskAllocator members
 
+        public string Name => workerClient.ServiceUrl.ToString();
+
         public async Task StartAsync(CancellationToken stoppingToken)
         {
             ExecutorId = await SubscribeAsync(handlerFactories.Values.Select(it => it.TaskName).ToArray(), stoppingToken);
@@ -97,6 +99,7 @@ namespace BrandUp.Worker.Allocator
             this.contractSerializer = contractSerializer ?? throw new ArgumentNullException(nameof(contractSerializer));
         }
 
+        public Uri ServiceUrl => httpClient.BaseAddress;
         public async Task<Guid> PushTaskAsync(object taskModel, CancellationToken cancellationToken = default)
         {
             if (taskModel == null)
