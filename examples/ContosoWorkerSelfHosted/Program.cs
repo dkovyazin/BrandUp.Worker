@@ -14,18 +14,22 @@ namespace ContosoWorker.SelfHosted
     {
         private static async Task Main(string[] args)
         {
-            var host = new HostBuilder()
-                .ConfigureAppConfiguration((hostContext, configApp) =>
+            var hostBuilder = new HostBuilder();
+
+            var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            if (environmentName != null)
+                hostBuilder.UseEnvironment(environmentName);
+
+            var host = hostBuilder.ConfigureAppConfiguration((hostContext, configApp) =>
                 {
                     configApp.SetBasePath(Directory.GetCurrentDirectory());
-                    configApp.AddJsonFile("hostsettings.json", optional: true);
                     configApp.AddJsonFile("appsettings.json", optional: true);
                     configApp.AddJsonFile($"appsettings.{hostContext.HostingEnvironment.EnvironmentName}.json", optional: true);
-                    //configApp.AddEnvironmentVariables(prefix: "PREFIX_");
                     configApp.AddCommandLine(args);
                 })
                 .ConfigureLogging((hostContext, configLogging) =>
                 {
+                    configLogging.AddConfiguration(hostContext.Configuration.GetSection("Logging"));
                     configLogging.AddConsole();
                     configLogging.AddDebug();
                 })

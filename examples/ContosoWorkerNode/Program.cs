@@ -1,4 +1,5 @@
-﻿using BrandUp.Worker.Builder;
+﻿using BrandUp.Worker;
+using BrandUp.Worker.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,18 +14,22 @@ namespace ContosoWorker.Node
     {
         public static async Task Main(string[] args)
         {
-            var hostBuilder = new HostBuilder()
-                .ConfigureAppConfiguration((hostContext, configApp) =>
+            var hostBuilder = new HostBuilder();
+
+            var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            if (environmentName != null)
+                hostBuilder.UseEnvironment(environmentName);
+
+            hostBuilder.ConfigureAppConfiguration((hostContext, configApp) =>
                 {
                     configApp.SetBasePath(Directory.GetCurrentDirectory());
-                    configApp.AddJsonFile("hostsettings.json", optional: true);
                     configApp.AddJsonFile("appsettings.json", optional: true);
                     configApp.AddJsonFile($"appsettings.{hostContext.HostingEnvironment.EnvironmentName}.json", optional: true);
-                    //configApp.AddEnvironmentVariables(prefix: "PREFIX_");
                     configApp.AddCommandLine(args);
                 })
                 .ConfigureLogging((hostContext, configLogging) =>
                 {
+                    configLogging.AddConfiguration(hostContext.Configuration.GetSection("Logging"));
                     configLogging.AddConsole();
                     configLogging.AddDebug();
                 })
@@ -37,9 +42,37 @@ namespace ContosoWorker.Node
 
                     executorBuilder
                         .MapTaskHandler<Tasks.TestTask, Handlers.TestTaskHandler>();
-                });
+                })
+                .UseConsoleLifetime();
 
-            await hostBuilder.RunConsoleAsync();
+            var host = hostBuilder.Build();
+
+            using (host)
+            {
+                await host.StartAsync();
+
+                while (true)
+                {
+                    var v = Console.ReadLine();
+                    if (string.IsNullOrEmpty(v))
+                    {
+                        await host.StopAsync();
+                        break;
+                    }
+                    else
+                    {
+                        using (var scope = host.Services.CreateScope())
+                        {
+                            var tasks = scope.ServiceProvider.GetRequiredService<ITaskService>();
+
+                            var taskId = await tasks.PushTaskAsync(new Tasks.TestTask());
+                            Console.WriteLine($"Add task {taskId}");
+                        }
+                    }
+                }
+            }
+
+            Console.ReadLine();
         }
     }
 }

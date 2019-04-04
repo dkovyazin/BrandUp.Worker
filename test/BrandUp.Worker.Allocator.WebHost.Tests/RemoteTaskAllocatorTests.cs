@@ -1,3 +1,4 @@
+using BrandUp.Worker.Executor;
 using ContosoWorker.Service;
 using ContosoWorker.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;

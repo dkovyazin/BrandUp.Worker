@@ -71,6 +71,10 @@ namespace BrandUp.Worker.Executor
                 {
                     commandsToExecute = (await taskAllocator.WaitTasksAsync(ExecutorId, cancellationToken)).ToArray();
                 }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
                 catch (Exception ex)
                 {
                     logger.LogCritical(ex, $"Executor {executorConnection.ExecutorId} error waiting tasks.");

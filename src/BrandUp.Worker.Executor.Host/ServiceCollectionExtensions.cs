@@ -1,5 +1,6 @@
 ﻿using BrandUp.Worker.Allocator;
 using BrandUp.Worker.Builder;
+using BrandUp.Worker.Executor;
 using System;
 
 namespace Microsoft.Extensions.DependencyInjection
@@ -19,6 +20,8 @@ namespace Microsoft.Extensions.DependencyInjection
             });
 
             services.AddScoped<ITaskAllocator, RemoteTaskAllocator>();
+
+            services.AddHostedService<RemoteTaskAllocatorHostService>();
 
             return builder.AddExecutor();
         }

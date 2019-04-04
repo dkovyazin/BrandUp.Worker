@@ -179,7 +179,7 @@ namespace BrandUp.Worker.Allocator
         {
             var executorId = await allocator.SubscribeAsync(metadataManager.Tasks.Select(it => it.TaskName).ToArray());
             var commandId1 = allocator.PushTask(new TestTask(), out bool isStarted, out Guid taskExecutorId);
-            var commandId2 = allocator.PushTask(new TestTask(), out isStarted, out executorId);
+            var commandId2 = allocator.PushTask(new TestTask(), out isStarted, out taskExecutorId);
 
             var tasksToExecute = (await allocator.WaitTasksAsync(executorId, CancellationToken.None)).ToList();
 

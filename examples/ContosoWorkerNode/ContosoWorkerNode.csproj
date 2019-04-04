@@ -14,7 +14,7 @@
   </ItemGroup>
   
   <ItemGroup>
-    <None Remove="hostsettings.json" />
+    <None Remove="appsettings.Development.json" />
   </ItemGroup>
 
   <ItemGroup>
