@@ -9,7 +9,7 @@ Tasks are defined using the attribute TaskAttribute.
 Using NuGet package [BrandUp.Worker.Common](https://www.nuget.org/packages/BrandUp.Worker.Common/)
 
 ```
-[Task(Name = "Custom name", TimeoutWaitingToStartInMiliseconds = 100, ExecutionTimeout = 30000)]
+[Task(Name = "Custom name", StartTimeout = 100, ExecutionTimeout = 30000)]
 public class TestTask
 {
     // Task properties
