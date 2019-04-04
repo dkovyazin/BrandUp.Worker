@@ -6,7 +6,7 @@ namespace BrandUp.Worker
     public class TaskAttribute : Attribute
     {
         public string Name { get; set; }
-        public int TimeoutWaitingToStartInMiliseconds { get; set; }
+        public int StartTimeout { get; set; } = 0;
         public int ExecutionTimeout { get; set; } = 30000;
     }
 }
