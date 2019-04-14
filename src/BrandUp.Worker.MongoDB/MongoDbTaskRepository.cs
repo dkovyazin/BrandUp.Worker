@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Options;
-using MongoDB.Bson;
+﻿using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
 using Newtonsoft.Json.Linq;
@@ -13,17 +12,13 @@ namespace BrandUp.Worker.Tasks
     public class MongoDbTaskRepository : ITaskRepository
     {
         private readonly ITaskMetadataManager taskMetadataManager;
-        private MongoClient client;
-        private readonly IMongoDatabase database;
         private readonly IMongoCollection<TaskDocument> collection;
 
-        public MongoDbTaskRepository(IOptions<MongoDbOptions> options, ITaskMetadataManager taskMetadataManager)
+        public MongoDbTaskRepository(MongoDB.IWorkerMongoDbDbContext dbContext, ITaskMetadataManager taskMetadataManager)
         {
             this.taskMetadataManager = taskMetadataManager ?? throw new ArgumentNullException(nameof(taskMetadataManager));
-            client = new MongoClient(options.Value.ConnectionString);
-            database = client.GetDatabase(options.Value.DatabaseName);
 
-            collection = database.GetCollection<TaskDocument>(options.Value.CollectionName);
+            collection = dbContext.Tasks;
         }
 
         public async Task<IEnumerable<TaskState>> GetActualTasksAsync(CancellationToken cancellationToken = default)
@@ -137,13 +132,7 @@ namespace BrandUp.Worker.Tasks
         }
     }
 
-    public class MongoDbOptions
-    {
-        public string ConnectionString { get; set; }
-        public string DatabaseName { get; set; }
-        public string CollectionName { get; set; } = "Tasks";
-    }
-
+    [BrandUp.MongoDB.MongoDbDocument(CollectionName = "Tasks")]
     public class TaskDocument
     {
         [BsonId, BsonRepresentation(BsonType.String)]
@@ -161,9 +150,9 @@ namespace BrandUp.Worker.Tasks
     public class TaskExecution
     {
         public TaskExecutionStatus Status { get; set; }
-        [BsonRepresentation(MongoDB.Bson.BsonType.String)]
+        [BsonRepresentation(BsonType.String)]
         public Guid ExecutorId { get; set; }
-        [BsonRepresentation(MongoDB.Bson.BsonType.DateTime)]
+        [BsonRepresentation(BsonType.DateTime)]
         public DateTime StartedDate { get; set; }
         public TimeSpan ExecutionTime { get; set; }
     }

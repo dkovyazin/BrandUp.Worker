@@ -1,4 +1,5 @@
-﻿using BrandUp.Worker.Tasks;
+﻿using BrandUp.MongoDB;
+using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 
@@ -6,11 +7,21 @@ namespace BrandUp.Worker.Builder
 {
     public static class IWorkerBuilderCoreExtensions
     {
-        public static IWorkerBuilderCore AddMongoDbRepository(this IWorkerBuilderCore builder, Action<MongoDbOptions> mongoDbOptions)
+        public static IWorkerBuilderCore AddMongoDb(this IWorkerBuilderCore builder, Action<IMongoDbContextBuilder> optionsAction)
         {
-            MongoDbConfig.EnsureConfigured();
+            builder.Services.AddMongoDbContext<MongoDB.WorkerMongoDbDbContext>(optionsAction);
+            builder.Services.AddMongoDbContextExension<MongoDB.WorkerMongoDbDbContext, MongoDB.IWorkerMongoDbDbContext>();
 
-            builder.Services.Configure(mongoDbOptions);
+            builder.Services.AddSingleton<ITaskRepository, MongoDbTaskRepository>();
+
+            return builder;
+        }
+
+        public static IWorkerBuilderCore AddMongoDb<TContext>(this IWorkerBuilderCore builder)
+            where TContext : MongoDbContext, MongoDB.IWorkerMongoDbDbContext
+        {
+            builder.Services.AddMongoDbContextExension<TContext, MongoDB.IWorkerMongoDbDbContext>();
+
             builder.Services.AddSingleton<ITaskRepository, MongoDbTaskRepository>();
 
             return builder;

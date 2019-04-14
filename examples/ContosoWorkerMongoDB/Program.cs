@@ -1,4 +1,5 @@
-﻿using BrandUp.Worker;
+﻿using BrandUp.MongoDB;
+using BrandUp.Worker;
 using BrandUp.Worker.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,10 +19,8 @@ namespace ContosoWorker
                 .ConfigureAppConfiguration((hostContext, configApp) =>
                 {
                     configApp.SetBasePath(Directory.GetCurrentDirectory());
-                    configApp.AddJsonFile("hostsettings.json", optional: true);
                     configApp.AddJsonFile("appsettings.json", optional: true);
                     configApp.AddJsonFile($"appsettings.{hostContext.HostingEnvironment.EnvironmentName}.json", optional: true);
-                    //configApp.AddEnvironmentVariables(prefix: "PREFIX_");
                     configApp.AddCommandLine(args);
                 })
                 .ConfigureLogging((hostContext, configLogging) =>
@@ -31,19 +30,19 @@ namespace ContosoWorker
                 })
                 .ConfigureServices((hostContext, services) =>
                 {
-
                     services
                         .AddWorkerAllocator(options =>
                         {
                             options.TimeoutWaitingTasksPerExecutor = TimeSpan.FromSeconds(2);
                         })
-                        .AddMongoDbRepository(options =>
+                        .AddMongoDb(options =>
                         {
                             var mongoConfig = hostContext.Configuration.GetSection("Worker.MongoDB");
 
                             options.ConnectionString = mongoConfig.GetValue<string>("ConnectionString");
                             options.DatabaseName = mongoConfig.GetValue<string>("DatabaseName");
-                            options.CollectionName = mongoConfig.GetValue<string>("CollectionName");
+
+                            options.UseCamelCaseElementName();
                         })
                         .AddTaskType<Tasks.TestTask>()
                         .AddLocalExecutor()
