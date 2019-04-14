@@ -12,20 +12,19 @@ namespace BrandUp.Worker.Tasks
     public class MongoDbTaskRepository : ITaskRepository
     {
         private readonly ITaskMetadataManager taskMetadataManager;
-        private readonly IMongoCollection<TaskDocument> collection;
+        private readonly MongoDB.IWorkerMongoDbDbContext dbContext;
 
         public MongoDbTaskRepository(MongoDB.IWorkerMongoDbDbContext dbContext, ITaskMetadataManager taskMetadataManager)
         {
             this.taskMetadataManager = taskMetadataManager ?? throw new ArgumentNullException(nameof(taskMetadataManager));
-
-            collection = dbContext.Tasks;
+            this.dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
         public async Task<IEnumerable<TaskState>> GetActualTasksAsync(CancellationToken cancellationToken = default)
         {
             var tasks = new List<TaskState>();
 
-            var cursor = await collection.FindAsync(it => it.IsFinished == false, cancellationToken: cancellationToken);
+            var cursor = await dbContext.Tasks.FindAsync(it => it.IsFinished == false, cancellationToken: cancellationToken);
             foreach (var doc in cursor.ToEnumerable(cancellationToken))
             {
                 var taskMetadata = taskMetadataManager.FindTaskMetadata(doc.TypeName);
@@ -67,7 +66,7 @@ namespace BrandUp.Worker.Tasks
                 Model = modelDoc
             };
 
-            await collection.InsertOneAsync(doc, new InsertOneOptions { BypassDocumentValidation = false }, cancellationToken);
+            await dbContext.Tasks.InsertOneAsync(doc, new InsertOneOptions { BypassDocumentValidation = false }, cancellationToken);
         }
 
         public async Task TaskStartedAsync(Guid taskId, Guid executorId, DateTime startedDate, CancellationToken cancellationToken = default)
@@ -79,7 +78,7 @@ namespace BrandUp.Worker.Tasks
                 ExecutorId = executorId
             });
 
-            var doc = await collection.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
+            var doc = await dbContext.Tasks.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
             if (doc == null)
                 throw new Exception();
         }
@@ -92,7 +91,7 @@ namespace BrandUp.Worker.Tasks
                 .Set(it => it.Execution.ExecutionTime, executingTime)
                 .Set(it => it.IsFinished, true);
 
-            var doc = await collection.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
+            var doc = await dbContext.Tasks.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
             if (doc == null)
                 throw new Exception();
         }
@@ -105,7 +104,7 @@ namespace BrandUp.Worker.Tasks
                 .Set(it => it.Execution.ExecutionTime, executingTime)
                 .Set(it => it.IsFinished, true);
 
-            var doc = await collection.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
+            var doc = await dbContext.Tasks.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
             if (doc == null)
                 throw new Exception();
         }
@@ -116,7 +115,7 @@ namespace BrandUp.Worker.Tasks
                 .Set(it => it.EndDate, endDate)
                 .Set(it => it.IsFinished, true);
 
-            var doc = await collection.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
+            var doc = await dbContext.Tasks.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
             if (doc == null)
                 throw new Exception();
         }
@@ -126,7 +125,7 @@ namespace BrandUp.Worker.Tasks
             var docUpdate = Builders<TaskDocument>.Update
                 .Set(it => it.Execution, null);
 
-            var doc = await collection.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
+            var doc = await dbContext.Tasks.FindOneAndUpdateAsync(it => it.Id == taskId, docUpdate, cancellationToken: cancellationToken);
             if (doc == null)
                 throw new Exception();
         }
