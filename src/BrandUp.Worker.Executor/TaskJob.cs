@@ -66,7 +66,7 @@ namespace BrandUp.Worker.Executor
 
                     if (executionWatch.ElapsedMilliseconds >= timeoutInMilliseconds)
                     {
-                        logger.LogInformation($"Task {TaskId} execution timeout.");
+                        logger.LogWarning($"Task {TaskId} execution timeout.");
 
                         await executorContext.OnTimeoutJob(this);
                     }
