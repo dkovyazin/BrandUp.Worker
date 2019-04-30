@@ -12,9 +12,9 @@ namespace BrandUp.Worker.Tasks
     public class MongoDbTaskRepository : ITaskRepository
     {
         private readonly ITaskMetadataManager taskMetadataManager;
-        private readonly MongoDB.IWorkerMongoDbDbContext dbContext;
+        private readonly MongoDB.IWorkerMongoDbContext dbContext;
 
-        public MongoDbTaskRepository(MongoDB.IWorkerMongoDbDbContext dbContext, ITaskMetadataManager taskMetadataManager)
+        public MongoDbTaskRepository(MongoDB.IWorkerMongoDbContext dbContext, ITaskMetadataManager taskMetadataManager)
         {
             this.taskMetadataManager = taskMetadataManager ?? throw new ArgumentNullException(nameof(taskMetadataManager));
             this.dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -131,7 +131,7 @@ namespace BrandUp.Worker.Tasks
         }
     }
 
-    [BrandUp.MongoDB.MongoDbDocument(CollectionName = "Tasks")]
+    [BrandUp.MongoDB.Document(CollectionName = "Tasks")]
     public class TaskDocument
     {
         [BsonId, BsonRepresentation(BsonType.String)]

@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BrandUp.MongoDB" Version="1.0.0.5" />
+    <PackageReference Include="BrandUp.MongoDB" Version="1.0.0.10" />
     <PackageReference Include="MongoDB.Driver" Version="2.8.0" />
   </ItemGroup>
 

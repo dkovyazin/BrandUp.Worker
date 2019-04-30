@@ -1,5 +1,6 @@
 ﻿using BrandUp.MongoDB;
 using BrandUp.Worker.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 
@@ -9,18 +10,26 @@ namespace BrandUp.Worker.Builder
     {
         public static IWorkerBuilderCore AddMongoDb(this IWorkerBuilderCore builder, Action<IMongoDbContextBuilder> optionsAction)
         {
-            builder.Services.AddMongoDbContext<MongoDB.WorkerMongoDbDbContext>(optionsAction);
-            builder.Services.AddMongoDbContextExension<MongoDB.WorkerMongoDbDbContext, MongoDB.IWorkerMongoDbDbContext>();
+            builder.Services.AddMongoDbContext<MongoDB.WorkerMongoDbContext>(optionsAction);
 
-            builder.Services.AddSingleton<ITaskRepository, MongoDbTaskRepository>();
+            AddMongoDb<MongoDB.WorkerMongoDbContext>(builder);
+
+            return builder;
+        }
+
+        public static IWorkerBuilderCore AddMongoDb(this IWorkerBuilderCore builder, IConfiguration configuration)
+        {
+            builder.Services.AddMongoDbContext<MongoDB.WorkerMongoDbContext>(configuration);
+
+            AddMongoDb<MongoDB.WorkerMongoDbContext>(builder);
 
             return builder;
         }
 
         public static IWorkerBuilderCore AddMongoDb<TContext>(this IWorkerBuilderCore builder)
-            where TContext : MongoDbContext, MongoDB.IWorkerMongoDbDbContext
+            where TContext : MongoDbContext, MongoDB.IWorkerMongoDbContext
         {
-            builder.Services.AddMongoDbContextExension<TContext, MongoDB.IWorkerMongoDbDbContext>();
+            builder.Services.AddMongoDbContextExension<TContext, MongoDB.IWorkerMongoDbContext>();
 
             builder.Services.AddSingleton<ITaskRepository, MongoDbTaskRepository>();
 
