@@ -19,7 +19,7 @@ namespace BrandUp.Worker.Models
 
     public class WaitTasksResponse
     {
-        public Allocator.TaskToExecute[] Tasks { get; set; }
+        public Allocator.TaskExecutionModel[] Tasks { get; set; }
     }
 
     public class SuccessTaskRequest

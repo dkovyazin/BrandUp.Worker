@@ -62,7 +62,7 @@ namespace BrandUp.Worker.Executor
             }
         }
 
-        public async Task<IEnumerable<TaskToExecute>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<TaskExecutionModel>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken = default)
         {
             var requestContent = contractSerializer.CreateJsonContent(new Models.WaitTasksRequest { ExecutorId = executorId });
 

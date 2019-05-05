@@ -271,7 +271,7 @@ namespace BrandUp.Worker.Allocator
 
             return Task.FromResult(executorId);
         }
-        public async Task<IEnumerable<TaskToExecute>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<TaskExecutionModel>> WaitTasksAsync(Guid executorId, CancellationToken cancellationToken = default)
         {
             if (!executors.TryGetValue(executorId, out TaskExecutor executor))
                 throw new ArgumentException();
@@ -286,7 +286,7 @@ namespace BrandUp.Worker.Allocator
             }
 
             var utcNow = DateTime.UtcNow;
-            var tasksToExecute = new List<TaskToExecute>();
+            var tasksToExecute = new List<TaskExecutionModel>();
             foreach (var task in tasks)
             {
                 var taskMetadata = MetadataManager.FindTaskMetadata(task.TaskModel);
@@ -296,7 +296,7 @@ namespace BrandUp.Worker.Allocator
                 executor.AddTask(task);
                 Interlocked.Increment(ref countExecutingTasks);
 
-                tasksToExecute.Add(new TaskToExecute { TaskId = task.TaskId, TaskModel = task.TaskModel, Timeout = taskMetadata.ExecutionTimeout });
+                tasksToExecute.Add(new TaskExecutionModel { TaskId = task.TaskId, TaskModel = task.TaskModel, Timeout = taskMetadata.ExecutionTimeout });
             }
             return tasksToExecute;
         }

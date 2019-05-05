@@ -4,8 +4,7 @@
     {
         public static IWorkerExecutorBuilder AddExecutor(this IWorkerBuilderCore builder)
         {
-            var executorBuilder = new WorkerExecutorBuilder(builder);
-            return executorBuilder;
+            return new WorkerExecutorBuilder(builder);
         }
     }
 }

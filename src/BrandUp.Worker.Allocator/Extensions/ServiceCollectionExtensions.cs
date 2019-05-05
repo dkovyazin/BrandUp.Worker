@@ -21,7 +21,7 @@ namespace Microsoft.Extensions.DependencyInjection
             builder.Services.AddHostedService<BrandUp.Worker.Allocator.Infrastructure.TaskAllocatorHostService>();
             builder.Services.AddSingleton<ITaskAllocator, TaskAllocator>();
             builder.Services.AddSingleton<ITaskRepository, DefaultTaskRepository>();
-            builder.Services.AddSingleton<ITaskService, LocalTaskService>();
+            builder.Services.AddSingleton(provider => (ITaskService)provider.GetRequiredService<ITaskAllocator>());
 
             return builder;
         }

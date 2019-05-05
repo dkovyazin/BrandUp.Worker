@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using BrandUp.Worker.Allocator;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -6,57 +7,56 @@ using System.Threading.Tasks;
 
 namespace BrandUp.Worker.Executor
 {
-    internal class TaskJob : IDisposable
+    public class TaskJob : IDisposable
     {
         private readonly object taskModel;
         private readonly ITaskHandler taskHandler;
         private readonly IJobExecutorContext executorContext;
-        private readonly ILogger<TaskJob> logger;
         private CancellationTokenSource cancellationSource;
         private Stopwatch executionWatch;
-        private int timeoutInMilliseconds = 0;
+        private readonly int timeoutInMilliseconds = 0;
 
         public Guid TaskId { get; }
         public TimeSpan Elapsed => executionWatch.Elapsed;
 
-        internal TaskJob(Guid taskId, object taskModel, ITaskHandler taskHandler, IJobExecutorContext executorContext, ILogger<TaskJob> logger)
+        public TaskJob(TaskExecutionModel executionModel, TaskHandlerMetadata handlerMetadata, IServiceScope serviceScope, IJobExecutorContext executorContext)
         {
-            TaskId = taskId;
-            this.taskModel = taskModel;
-            this.taskHandler = taskHandler;
-            this.executorContext = executorContext;
-            this.logger = logger;
+            if (executionModel == null)
+                throw new ArgumentNullException(nameof(executionModel));
+            if (handlerMetadata == null)
+                throw new ArgumentNullException(nameof(handlerMetadata));
+            if (executionModel.Timeout <= 0)
+                throw new ArgumentOutOfRangeException(nameof(executionModel.Timeout));
+
+            TaskId = executionModel.TaskId;
+            taskModel = executionModel.TaskModel;
+            timeoutInMilliseconds = executionModel.Timeout;
+
+            taskHandler = (ITaskHandler)serviceScope.ServiceProvider.GetRequiredService(handlerMetadata.HandlerType);
+            this.executorContext = executorContext ?? throw new ArgumentNullException(nameof(executorContext));
         }
 
-        public void Start(CancellationToken cancellationToken, int timeoutInMilliseconds)
+        public Task Run(CancellationToken cancellationToken)
         {
-            if (timeoutInMilliseconds <= 0)
-                throw new ArgumentOutOfRangeException(nameof(timeoutInMilliseconds));
-            this.timeoutInMilliseconds = timeoutInMilliseconds;
-
             executionWatch = Stopwatch.StartNew();
 
             cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cancellationSource.CancelAfter(timeoutInMilliseconds);
 
-            logger.LogInformation($"Task {TaskId} starting.");
-
-            Task.Run(ExecuteAsync, cancellationSource.Token);
+            return Task.Run(ExecuteAsync, cancellationSource.Token);
         }
 
         private async Task ExecuteAsync()
         {
-            logger.LogInformation($"Task {TaskId} started.");
-
             try
             {
+                await executorContext.OnStartedJob(this);
+
                 try
                 {
                     await taskHandler.WorkAsync(taskModel, cancellationSource.Token);
 
                     executionWatch.Stop();
-
-                    logger.LogInformation($"Task {TaskId} success.");
 
                     await executorContext.OnSuccessJob(this);
                 }
@@ -65,45 +65,36 @@ namespace BrandUp.Worker.Executor
                     executionWatch.Stop();
 
                     if (executionWatch.ElapsedMilliseconds >= timeoutInMilliseconds)
-                    {
-                        logger.LogWarning($"Task {TaskId} execution timeout.");
-
                         await executorContext.OnTimeoutJob(this);
-                    }
                     else
-                    {
-                        logger.LogInformation($"Task {TaskId} cancelled.");
-
                         await executorContext.OnDefferJob(this);
-                    }
                 }
                 catch (Exception exception)
                 {
                     executionWatch.Stop();
-
-                    logger.LogError(exception, $"Task {TaskId} error.");
 
                     await executorContext.OnErrorJob(this, exception);
                 }
             }
             catch (Exception unhandledException)
             {
-                logger.LogCritical(unhandledException, $"Task {TaskId} unhandled error.");
-
                 await executorContext.OnUnhandledError(this, unhandledException);
             }
         }
 
         public void Dispose()
         {
-            taskHandler?.Dispose();
+            if (taskHandler is IDisposable d)
+                d.Dispose();
+
             cancellationSource?.Dispose();
         }
     }
 
-    internal interface IJobExecutorContext
+    public interface IJobExecutorContext
     {
         Guid ExecutorId { get; }
+        Task OnStartedJob(TaskJob job);
         Task OnSuccessJob(TaskJob job);
         Task OnDefferJob(TaskJob job);
         Task OnTimeoutJob(TaskJob job);

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace BrandUp.Worker.Executor
 {
-    public interface ITaskHandlerManager
+    public interface ITaskHandlerLocator
     {
         IEnumerable<Type> TaskTypes { get; }
     }

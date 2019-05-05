@@ -1,8 +1,10 @@
 ﻿using BrandUp.Worker.Allocator;
+using BrandUp.Worker.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,12 +19,12 @@ namespace BrandUp.Worker.Executor
         private readonly ITaskAllocator taskAllocator;
         private readonly IServiceProvider serviceProvider;
         private readonly ILogger<TaskExecutor> logger;
-        private IExecutorConnection executorConnection;
         private bool isStarted = false;
         private int executedCommands = 0;
         private int faultedCommands = 0;
         private int cancelledCommands = 0;
         private readonly ConcurrentDictionary<Guid, TaskJob> _startedJobs = new ConcurrentDictionary<Guid, TaskJob>();
+        private readonly Dictionary<Type, TaskHandlerMetadata> handlerFactories = new Dictionary<Type, TaskHandlerMetadata>();
 
         #endregion
 
@@ -36,20 +38,35 @@ namespace BrandUp.Worker.Executor
 
         #endregion
 
-        public TaskExecutor(ITaskAllocator taskAllocator, IServiceProvider serviceProvider, ILogger<TaskExecutor> logger)
+        public TaskExecutor(ITaskAllocator taskAllocator, ITaskHandlerLocator handlerLocator, ITaskMetadataManager metadataManager, IServiceProvider serviceProvider, ILogger<TaskExecutor> logger)
         {
             this.taskAllocator = taskAllocator ?? throw new ArgumentNullException(nameof(taskAllocator));
             this.serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+            foreach (var taskType in handlerLocator.TaskTypes)
+            {
+                var taskMetadata = metadataManager.FindTaskMetadata(taskType);
+                if (taskMetadata == null)
+                    throw new InvalidOperationException();
+
+                handlerFactories.Add(taskType, new TaskHandlerMetadata(taskMetadata.TaskName, HandlerBaseType.MakeGenericType(taskType)));
+            }
         }
 
-        public async Task WorkAsync(IExecutorConnection executorConnection, CancellationToken cancellationToken)
+        public async Task ConnectAsync(CancellationToken cancellationToken)
+        {
+            logger.LogInformation($"Connecting executor...");
+
+            ExecutorId = await taskAllocator.SubscribeAsync(handlerFactories.Values.Select(it => it.TaskName).ToArray(), cancellationToken);
+
+            logger.LogInformation($"Subscribed executor {ExecutorId}.");
+        }
+        public async Task WorkAsync(CancellationToken cancellationToken)
         {
             if (isStarted)
                 throw new InvalidOperationException();
             isStarted = true;
-
-            this.executorConnection = executorConnection ?? throw new ArgumentNullException(nameof(executorConnection));
 
             await WaitingTasksCycleAsync(cancellationToken);
 
@@ -58,14 +75,14 @@ namespace BrandUp.Worker.Executor
 
         private async Task WaitingTasksCycleAsync(CancellationToken cancellationToken)
         {
-            logger.LogInformation($"Executor {executorConnection.ExecutorId} start working.");
+            logger.LogInformation($"Executor {ExecutorId} start working.");
 
             var countWaits = 0;
             while (!cancellationToken.IsCancellationRequested)
             {
-                logger.LogInformation($"Executor {executorConnection.ExecutorId} waiting tasks...");
+                logger.LogInformation($"Executor {ExecutorId} waiting tasks...");
 
-                TaskToExecute[] commandsToExecute;
+                TaskExecutionModel[] commandsToExecute;
 
                 try
                 {
@@ -77,14 +94,14 @@ namespace BrandUp.Worker.Executor
                 }
                 catch (Exception ex)
                 {
-                    logger.LogCritical(ex, $"Executor {executorConnection.ExecutorId} error waiting tasks.");
+                    logger.LogCritical(ex, $"Executor {ExecutorId} error waiting tasks.");
 
                     await Task.Delay(5000);
 
                     continue;
                 }
 
-                logger.LogInformation($"Executor {executorConnection.ExecutorId} received tasks: {commandsToExecute.Length}");
+                logger.LogInformation($"Executor {ExecutorId} received tasks: {commandsToExecute.Length}");
 
                 foreach (var taskToExecute in commandsToExecute)
                     StartJob(taskToExecute, cancellationToken);
@@ -92,34 +109,17 @@ namespace BrandUp.Worker.Executor
                 countWaits++;
             }
 
-            logger.LogInformation($"Executor {executorConnection.ExecutorId} end working.");
+            logger.LogInformation($"Executor {ExecutorId} end working.");
         }
-        private void StartJob(TaskToExecute taskToExecute, CancellationToken cancellationToken)
+        private void StartJob(TaskExecutionModel executionModel, CancellationToken cancellationToken)
         {
-            if (!executorConnection.TryGetHandlerMetadata(taskToExecute.TaskModel.GetType(), out TaskHandlerMetadata handlerMetadata))
+            if (!handlerFactories.TryGetValue(executionModel.TaskModel.GetType(), out TaskHandlerMetadata handlerMetadata))
                 throw new InvalidOperationException();
 
             var jobScope = serviceProvider.CreateScope();
 
-            try
-            {
-                var taskHandler = (ITaskHandler)jobScope.ServiceProvider.GetRequiredService(handlerMetadata.HandlerType);
-                var jobLogger = jobScope.ServiceProvider.GetRequiredService<ILogger<TaskJob>>();
-
-                var job = new TaskJob(taskToExecute.TaskId, taskToExecute.TaskModel, taskHandler, this, jobLogger);
-                if (!_startedJobs.TryAdd(job.TaskId, job))
-                    throw new InvalidOperationException("Не удалось добавить задачу в список выполняемых.");
-
-                job.Start(cancellationToken, taskToExecute.Timeout);
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
-            finally
-            {
-                jobScope.Dispose();
-            }
+            var job = new TaskJob(executionModel, handlerMetadata, jobScope, this);
+            job.Run(cancellationToken);
         }
         private void DetachJob(TaskJob job)
         {
@@ -130,10 +130,21 @@ namespace BrandUp.Worker.Executor
 
         #region IJobExecutorContext members
 
-        public Guid ExecutorId => executorConnection.ExecutorId;
+        public Guid ExecutorId { get; private set; }
+        Task IJobExecutorContext.OnStartedJob(TaskJob job)
+        {
+            if (!_startedJobs.TryAdd(job.TaskId, job))
+                throw new InvalidOperationException("Не удалось добавить задачу в список выполняемых.");
+
+            logger.LogInformation($"Task {job.TaskId} started.");
+
+            return Task.CompletedTask;
+        }
         async Task IJobExecutorContext.OnSuccessJob(TaskJob job)
         {
             DetachJob(job);
+
+            logger.LogInformation($"Task {job.TaskId} success.");
 
             await taskAllocator.SuccessTaskAsync(ExecutorId, job.TaskId, job.Elapsed, CancellationToken.None);
 
@@ -143,6 +154,8 @@ namespace BrandUp.Worker.Executor
         {
             DetachJob(job);
 
+            logger.LogInformation($"Task {job.TaskId} deffered.");
+
             await taskAllocator.DeferTaskAsync(ExecutorId, job.TaskId, CancellationToken.None);
 
             Interlocked.Increment(ref cancelledCommands);
@@ -150,6 +163,8 @@ namespace BrandUp.Worker.Executor
         async Task IJobExecutorContext.OnTimeoutJob(TaskJob job)
         {
             DetachJob(job);
+
+            logger.LogWarning($"Task {job.TaskId} execution timeout.");
 
             await taskAllocator.ErrorTaskAsync(ExecutorId, job.TaskId, job.Elapsed, new TimeoutException("Timeout task executing."), CancellationToken.None);
 
@@ -160,6 +175,8 @@ namespace BrandUp.Worker.Executor
         {
             DetachJob(job);
 
+            logger.LogError(exception, $"Task {job.TaskId} error.");
+
             await taskAllocator.ErrorTaskAsync(ExecutorId, job.TaskId, job.Elapsed, exception, CancellationToken.None);
 
             Interlocked.Increment(ref executedCommands);
@@ -168,6 +185,8 @@ namespace BrandUp.Worker.Executor
         async Task IJobExecutorContext.OnUnhandledError(TaskJob job, Exception exception)
         {
             DetachJob(job);
+
+            logger.LogCritical(exception, $"Task {job.TaskId} unhandled error.");
 
             await taskAllocator.ErrorTaskAsync(ExecutorId, job.TaskId, job.Elapsed, exception, CancellationToken.None);
 

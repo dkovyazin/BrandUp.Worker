@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace BrandUp.Worker.Builder
 {
-    public class WorkerExecutorBuilder : IWorkerExecutorBuilder, ITaskHandlerManager
+    public class WorkerExecutorBuilder : IWorkerExecutorBuilder, ITaskHandlerLocator
     {
         private readonly IWorkerBuilderCore workerBuilder;
         private readonly List<Type> taskTypes = new List<Type>();
@@ -15,7 +15,7 @@ namespace BrandUp.Worker.Builder
         {
             this.workerBuilder = workerBuilder ?? throw new ArgumentNullException(nameof(workerBuilder));
 
-            workerBuilder.Services.AddSingleton<ITaskHandlerManager>(this);
+            workerBuilder.Services.AddSingleton<ITaskHandlerLocator>(this);
             workerBuilder.Services.AddSingleton<TaskExecutor>();
         }
 
@@ -42,7 +42,7 @@ namespace BrandUp.Worker.Builder
         }
         public ITaskMetadataManager TasksMetadata => workerBuilder.TasksMetadata;
 
-        IEnumerable<Type> ITaskHandlerManager.TaskTypes => taskTypes;
+        IEnumerable<Type> ITaskHandlerLocator.TaskTypes => taskTypes;
     }
 
     public interface IWorkerExecutorBuilder : IWorkerBuilderCore
