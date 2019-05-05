@@ -197,12 +197,6 @@ namespace BrandUp.Worker.Executor
         #endregion
     }
 
-    public interface IExecutorConnection
-    {
-        Guid ExecutorId { get; }
-        bool TryGetHandlerMetadata(Type taskType, out TaskHandlerMetadata handlerMetadata);
-    }
-
     public class TaskHandlerMetadata
     {
         public string TaskName { get; }
