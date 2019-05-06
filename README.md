@@ -1,7 +1,5 @@
 # BrandUp.Worker
 
-[![codecov](https://codecov.io/gh/dkovyazin/BrandUp.Worker/branch/master/graph/badge.svg)](https://codecov.io/gh/dkovyazin/BrandUp.Worker)
-
 [![Build Status](https://dev.azure.com/brandup/BrandUp%20Core/_apis/build/status/BrandUp.Worker?branchName=master)](https://dev.azure.com/brandup/BrandUp%20Core/_build/latest?definitionId=14&branchName=master)
 
 ## Task definition
